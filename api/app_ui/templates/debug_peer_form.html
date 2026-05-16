@@ -1,0 +1,23 @@
+<div id="debug-peer-form-wrapper">
+  <form
+    hx-get="/ui/debug/peer/result"
+    hx-target="#debug-peer-result-container"
+    hx-swap="innerHTML"
+  >
+    <div style="margin-bottom: 12px;">
+      <label for="peer_id">Peer</label>
+      <select id="peer_id" name="peer_id" required>
+        <option value="">Select peer...</option>
+        {% for peer in peers %}
+        <option value="{{ peer.id }}">
+          #{{ peer.id }} — {{ peer.vpn_ip if peer.vpn_ip is defined else peer.public_key }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <button type="submit">Check access</button>
+    </div>
+  </form>
+</div>

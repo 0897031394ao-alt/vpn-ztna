@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Debug Peer · VPN-ZTNA{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h1>Debug Peer</h1>
+    <div class="muted">Проверка effective access для peer через HTMX.</div>
+  </div>
+  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
+</div>
+
+<div class="card">
+  <h2>Peer Access Debug</h2>
+  <div class="muted">Сначала загружается форма выбора peer, затем отдельно подгружается результат.</div>
+
+  <div
+    id="debug-peer-form-container"
+    hx-get="/ui/debug/peer/form"
+    hx-trigger="load"
+    hx-target="#debug-peer-form-container"
+    hx-swap="innerHTML"
+    style="margin-top:16px;"
+  >
+    Loading debug peer form...
+  </div>
+
+  <div id="debug-peer-result-container" style="margin-top:16px;"></div>
+</div>
+{% endblock %}

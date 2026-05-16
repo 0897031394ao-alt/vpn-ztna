@@ -1,0 +1,32 @@
+<div>
+  <h2 class="text-lg font-semibold text-slate-100 mb-4">Select user</h2>
+
+  <form
+    class="space-y-4"
+    hx-get="/ui/debug/access/result"
+    hx-target="#debug-access-result-panel"
+    hx-swap="innerHTML"
+  >
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">User</label>
+      <select
+        name="user_id"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        required
+      >
+        <option value="">Select user</option>
+        {% for user in users %}
+        <option value="{{ user.id }}">{{ user.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button
+      type="submit"
+      class="w-full px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
+    >
+      Evaluate access
+    </button>
+  </form>
+</div>
+

@@ -1,0 +1,85 @@
+{% if not peer %}
+<div class="rounded-lg border border-rose-900/60 bg-rose-950/30 p-4 text-sm text-rose-300">
+  Peer not found.
+</div>
+{% else %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+    <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Peer</div>
+    <div class="text-slate-100 font-medium">#{{ peer.id }} · {{ peer.vpn_ip }}</div>
+    <div class="text-sm text-slate-400 break-all">{{ peer.public_key }}</div>
+    <div class="text-xs text-slate-500 mt-2">
+      allowed_ips: {{ peer.allowed_ips }}
+    </div>
+    <div class="text-xs text-slate-500 mt-1">
+      provisioning_status: {{ peer.provisioning_status }}
+    </div>
+  </div>
+
+  <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+    <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Bound user</div>
+    {% if user %}
+      <div class="text-slate-100 font-medium">{{ user.username }}</div>
+      <div class="text-sm text-slate-400">{{ user.email }}</div>
+      <div class="text-xs text-slate-500 mt-2">user_id: {{ user.id }}</div>
+    {% else %}
+      <div class="text-sm text-slate-400">
+        Bound user not found.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if user and rows %}
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">Resource</th>
+        <th class="px-3 py-2 text-left">Address</th>
+        <th class="px-3 py-2 text-left">Decision</th>
+        <th class="px-3 py-2 text-left">Reason</th>
+        <th class="px-3 py-2 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for row in rows %}
+      <tr class="align-top hover:bg-slate-900/60">
+        <td class="px-3 py-2">
+          <div class="text-slate-100 font-medium">{{ row.resource_name }}</div>
+          <div class="text-xs text-slate-400">{{ row.resource_type }} / #{{ row.resource_id }}</div>
+        </td>
+        <td class="px-3 py-2 text-xs text-sky-300 font-mono">
+          {{ row.address }} / {{ row.protocol }}
+        </td>
+        <td class="px-3 py-2">
+          {% if row.decision == "allow" %}
+          <span class="inline-flex rounded-full bg-emerald-900/50 px-2 py-1 text-xs text-emerald-300">allow</span>
+          {% else %}
+          <span class="inline-flex rounded-full bg-rose-900/50 px-2 py-1 text-xs text-rose-300">deny</span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-2 text-xs text-slate-300">
+          {{ row.reason }}
+        </td>
+        <td class="px-3 py-2">
+          {% if user %}
+          <a
+            href="/debug/check?user_id={{ user.id }}&resource_id={{ row.resource_id }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-100 hover:bg-slate-700"
+          >
+            Drill-down
+          </a>
+          {% else %}
+          <span class="text-xs text-slate-500">No user</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}

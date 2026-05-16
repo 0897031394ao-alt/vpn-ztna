@@ -1,0 +1,62 @@
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">Priority</th>
+        <th class="px-3 py-2 text-left">Name</th>
+        <th class="px-3 py-2 text-left">Subject</th>
+        <th class="px-3 py-2 text-left">Resource</th>
+        <th class="px-3 py-2 text-left">Effect</th>
+        <th class="px-3 py-2 text-left">Conditions</th>
+        <th class="px-3 py-2 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for policy in policies %}
+      <tr class="hover:bg-slate-900/60">
+        <td class="px-3 py-2 text-slate-300 font-mono text-xs">{{ policy.priority }}</td>
+        <td class="px-3 py-2 text-slate-100 font-medium">{{ policy.name }}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">{{ policy.subject_label }}</td>
+        <td class="px-3 py-2 text-sky-300 text-xs">{{ policy.resource_label }}</td>
+        <td class="px-3 py-2">
+          {% if policy.effect == "allow" %}
+          <span class="inline-flex rounded-full bg-emerald-900/50 px-2 py-1 text-xs text-emerald-300">allow</span>
+          {% else %}
+          <span class="inline-flex rounded-full bg-rose-900/50 px-2 py-1 text-xs text-rose-300">deny</span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-2 text-slate-400 text-xs">{{ policy.conditions or "—" }}</td>
+        <td class="px-3 py-2">
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+              hx-get="/ui/policies/{{ policy.id }}/edit"
+              hx-target="#policy-form-panel"
+              hx-swap="innerHTML"
+            >
+              Edit
+            </button>
+
+            <button
+              class="px-2 py-1 rounded bg-rose-900/70 text-rose-200 text-xs hover:bg-rose-800"
+              hx-post="/ui/policies/{{ policy.id }}/delete"
+              hx-target="#policies-table"
+              hx-swap="innerHTML"
+              hx-confirm="Disable policy '{{ policy.name }}'?"
+            >
+              Disable
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="px-3 py-8 text-center text-slate-400">
+          No policies yet.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · VPN-ZTNA{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h1>Admin Dashboard</h1>
+    <div class="muted">Минимальный рабочий экран админки. Сначала поднимаем peers-таблицу, затем resources CRUD через HTMX.</div>
+  </div>
+  <a class="btn btn-secondary" href="/ui/policy-explain">Open User Portal</a>
+</div>
+
+<div class="card">
+  <h2>Peers</h2>
+  <div class="muted">Таблица подгружается через HTMX из <code>/ui/peers/table</code>.</div>
+
+  <div
+    id="peers-table-container"
+    hx-get="/ui/peers/table"
+    hx-trigger="load"
+    hx-target="#peers-table-container"
+    hx-swap="innerHTML"
+    style="margin-top:16px;"
+  >
+    Loading peers table...
+  </div>
+</div>
+
+<div class="card" style="margin-top:24px;">
+  <div class="toolbar" style="margin-bottom:12px;">
+    <div>
+      <h2>Resources</h2>
+      <div class="muted">Фрагменты подгружаются через HTMX из <code>/ui/resources/*</code>.</div>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary"
+      hx-get="/ui/resources/new"
+      hx-target="#resource-form-container"
+      hx-swap="innerHTML"
+      hx-target-4*="#resources-error-container"
+      hx-target-5*="#resources-error-container"
+    >
+      New resource
+    </button>
+  </div>
+
+  <div id="resources-error-container" style="margin-bottom:16px;"></div>
+
+  <div
+    id="resources-table-container"
+    hx-get="/ui/resources/table"
+    hx-trigger="load"
+    hx-target="#resources-table-container"
+    hx-swap="innerHTML"
+  >
+    Loading resources table...
+  </div>
+
+  <div
+    id="resource-form-container"
+    style="margin-top:16px;"
+  ></div>
+</div>
+{% endblock %}
+

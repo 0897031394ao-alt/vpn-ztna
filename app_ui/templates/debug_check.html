@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-100">Access Check</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Test one user against one resource and see the final decision.
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+  <aside
+    id="debug-check-form-panel"
+    class="xl:col-span-1 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+    hx-get="/ui/debug/check/form{% if prefill_user_id or prefill_resource_id %}?{% if prefill_user_id %}user_id={{ prefill_user_id }}{% endif %}{% if prefill_resource_id %}{% if prefill_user_id %}&{% endif %}resource_id={{ prefill_resource_id }}{% endif %}{% endif %}"
+    hx-trigger="load"
+    hx-target="#debug-check-form-panel"
+    hx-swap="innerHTML"
+  >
+    <div class="text-sm text-slate-400">Loading form...</div>
+  </aside>
+
+  <section
+    id="debug-check-result-panel"
+    class="xl:col-span-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[320px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select a user and a resource to evaluate access.
+    </div>
+  </section>
+</div>
+{% endblock %}

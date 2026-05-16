@@ -1,0 +1,35 @@
+<div id="debug-check-form-wrapper">
+  <form
+    hx-get="/ui/debug/check/result"
+    hx-target="#debug-check-result-container"
+    hx-swap="innerHTML"
+  >
+    <div style="margin-bottom: 12px;">
+      <label for="user_id">User</label>
+      <select id="user_id" name="user_id" required>
+        <option value="">Select user...</option>
+        {% for user in users %}
+        <option value="{{ user.id }}">
+          #{{ user.id }} — {{ user.label if user.label is defined else user.username }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <label for="resource_id">Resource</label>
+      <select id="resource_id" name="resource_id" required>
+        <option value="">Select resource...</option>
+        {% for resource in resources %}
+        <option value="{{ resource.id }}">
+          #{{ resource.id }} — {{ resource.label if resource.label is defined else resource.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <button type="submit">Run check</button>
+    </div>
+  </form>
+</div>

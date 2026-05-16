@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}VPN-ZTNA Admin{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <script src="https://unpkg.com/htmx-ext-response-targets@2.0.2/response-targets.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121933;
+      --panel-2: #1a2345;
+      --text: #e8ecf8;
+      --muted: #9aa6c5;
+      --accent: #4f8cff;
+      --ok: #1db954;
+      --warn: #ffb020;
+      --err: #ff5d5d;
+      --border: #2a3766;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+    }
+    .brand {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .nav a {
+      display: block;
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 10px;
+      background: transparent;
+    }
+    .nav a:hover {
+      background: var(--panel-2);
+    }
+    .content {
+      padding: 24px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    h1, h2, h3 { margin-top: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      background: var(--panel);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      background: var(--panel-2);
+      color: var(--text);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge-ok { background: rgba(29,185,84,.15); color: #7ee2a8; }
+    .badge-warn { background: rgba(255,176,32,.15); color: #ffd27a; }
+    .badge-err { background: rgba(255,93,93,.15); color: #ff9f9f; }
+    .muted { color: var(--muted); }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .btn {
+      display: inline-block;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: var(--panel-2);
+      color: var(--text);
+    }
+    code {
+      background: rgba(255,255,255,.06);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">VPN-ZTNA</div>
+      <nav class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/tenants">Tenants</a>
+        <a href="/resources">Resources</a>
+        <a href="/policies">Policies</a>
+        <a href="/debug/check">Debug Check</a>
+        <a href="/debug/peer">Debug Peer</a>
+        <a href="/ui/policy-explain">User Portal</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

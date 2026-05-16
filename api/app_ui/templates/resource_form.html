@@ -1,0 +1,65 @@
+<div id="resource-form-wrapper">
+  <h3>{{ form_title }}</h3>
+
+  {% if errors %}
+  <div class="alert alert-danger">
+    <ul>
+      {% for err in errors %}
+      <li>{{ err }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form
+    hx-post="{{ form_action }}"
+    hx-target="#resources-table-container"
+    hx-swap="innerHTML"
+    hx-target-422="#resource-form-container"
+    hx-target-4*="#resources-error-container"
+    hx-target-5*="#resources-error-container"
+  >
+    <div>
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{ resource.name or '' }}" required>
+    </div>
+
+    <div>
+      <label for="description">Description</label>
+      <input type="text" id="description" name="description" value="{{ resource.description or '' }}">
+    </div>
+
+    <div>
+      <label for="resource_type">Type</label>
+      <select id="resource_type" name="resource_type" required>
+        <option value="host" {% if resource.resource_type == 'host' %}selected{% endif %}>Host</option>
+        <option value="service" {% if resource.resource_type == 'service' %}selected{% endif %}>Service</option>
+        <option value="subnet" {% if resource.resource_type == 'subnet' %}selected{% endif %}>Subnet</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="address">Address</label>
+      <input type="text" id="address" name="address" value="{{ resource.address or '' }}" required>
+    </div>
+
+    <div>
+      <label for="ports">Ports</label>
+      <input type="text" id="ports" name="ports" value="{{ resource.ports or '' }}">
+    </div>
+
+    <div>
+      <label for="protocol">Protocol</label>
+      <select id="protocol" name="protocol">
+        <option value="any" {% if (resource.protocol or 'any') == 'any' %}selected{% endif %}>Any</option>
+        <option value="tcp" {% if resource.protocol == 'tcp' %}selected{% endif %}>TCP</option>
+        <option value="udp" {% if resource.protocol == 'udp' %}selected{% endif %}>UDP</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 12px;">
+      <button type="submit">{{ submit_label }}</button>
+    </div>
+  </form>
+</div>
+

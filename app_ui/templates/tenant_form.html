@@ -1,0 +1,67 @@
+<div>
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-slate-100">{{ form_title }}</h2>
+    <button
+      class="text-xs text-slate-400 hover:text-white"
+      hx-get="/ui/tenants/new"
+      hx-target="#tenant-form-panel"
+      hx-swap="innerHTML"
+    >
+      Reset
+    </button>
+  </div>
+
+  <form
+    class="space-y-4"
+    hx-post="{{ form_action }}"
+    hx-target="#tenants-table"
+    hx-swap="innerHTML"
+  >
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Name</label>
+      <input
+        type="text"
+        name="name"
+        value="{{ tenant.name if tenant else '' }}"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        placeholder="Acme Corp"
+        required
+      />
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Slug</label>
+      <input
+        type="text"
+        name="slug"
+        value="{{ tenant.slug if tenant else '' }}"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        placeholder="acme"
+        required
+      />
+      <p class="mt-1 text-xs text-slate-500">
+        Slug should be unique and URL-safe.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2 pt-2">
+      <button
+        type="submit"
+        class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
+      >
+        {{ submit_label }}
+      </button>
+
+      <button
+        type="button"
+        class="px-3 py-2 rounded-md bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
+        hx-get="/ui/tenants/table"
+        hx-target="#tenants-table"
+        hx-swap="innerHTML"
+      >
+        Refresh table
+      </button>
+    </div>
+  </form>
+</div>
+

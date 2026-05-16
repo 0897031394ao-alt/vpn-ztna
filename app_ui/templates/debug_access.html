@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-100">Effective Access Debug</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Inspect the final access decision for each resource for a selected user.
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+  <aside
+    id="debug-access-form-panel"
+    class="xl:col-span-1 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+    hx-get="/ui/debug/access/form"
+    hx-trigger="load"
+    hx-target="#debug-access-form-panel"
+    hx-swap="innerHTML"
+  >
+    <div class="text-sm text-slate-400">Loading users...</div>
+  </aside>
+
+  <section
+    id="debug-access-result-panel"
+    class="xl:col-span-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[320px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select a user to inspect effective access.
+    </div>
+  </section>
+</div>
+{% endblock %}

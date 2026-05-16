@@ -1,0 +1,107 @@
+<div id="debug-check-result-wrapper" style="margin-top: 16px;">
+  <h3>Access check result</h3>
+
+  {% if user %}
+  <h4>User</h4>
+  <table>
+    <tbody>
+      {% for key, value in user.items() %}
+      <tr>
+        <th>{{ key }}</th>
+        <td>{{ value }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <th>group_names</th>
+        <td>{{ group_names | default([]) }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if resource %}
+  <h4 style="margin-top:16px;">Resource</h4>
+  <table>
+    <tbody>
+      {% for key, value in resource.items() %}
+      <tr>
+        <th>{{ key }}</th>
+        <td>{{ value }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h4 style="margin-top:16px;">Decision</h4>
+  <div style="margin-bottom: 12px;">
+    {% if decision == 'allow' %}
+      <span class="badge badge-ok">allow</span>
+    {% elif decision == 'deny' %}
+      <span class="badge badge-err">deny</span>
+    {% else %}
+      <span class="badge badge-warn">{{ decision }}</span>
+    {% endif %}
+  </div>
+
+  <div><strong>Reason:</strong> {{ reason }}</div>
+
+  <h4 style="margin-top:16px;">Winning policy</h4>
+  {% if winning_policy %}
+  <table>
+    <tbody>
+      {% for key, value in winning_policy.items() %}
+      <tr>
+        <th>{{ key }}</th>
+        <td>{{ value }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="muted">No winning policy.</div>
+  {% endif %}
+
+  <h4 style="margin-top:16px;">Matched policies</h4>
+  {% if matched_policies %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Effect</th>
+        <th>Priority</th>
+        <th>Subject</th>
+        <th>Conditions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for policy in matched_policies %}
+      <tr>
+        <td>{{ policy.get('id', '') }}</td>
+        <td>{{ policy.get('name', '') }}</td>
+        <td>{{ policy.get('effect', '') }}</td>
+        <td>{{ policy.get('priority', '') }}</td>
+        <td>{{ policy.get('subject', '') }}</td>
+        <td>{{ policy.get('conditions', '') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="muted">No matched policies.</div>
+  {% endif %}
+
+  <details style="margin-top: 16px;">
+    <summary>Raw context</summary>
+    <pre>
+user={{ user | default(None) }}
+resource={{ resource | default(None) }}
+decision={{ decision | default(None) }}
+reason={{ reason | default(None) }}
+matched_policies={{ matched_policies | default([]) }}
+winning_policy={{ winning_policy | default(None) }}
+group_names={{ group_names | default([]) }}
+    </pre>
+  </details>
+</div>

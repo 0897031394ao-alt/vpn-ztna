@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold text-slate-100">Peers</h1>
+</div>
+
+<div
+  id="peers-table"
+  hx-get="/ui/peers/table"
+  hx-trigger="load"
+  hx-target="#peers-table"
+  hx-swap="innerHTML"
+>
+  <div class="text-sm text-slate-400">Loading peers...</div>
+</div>
+{% endblock %}
+

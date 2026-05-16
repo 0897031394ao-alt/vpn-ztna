@@ -1,0 +1,74 @@
+{% if not user %}
+<div class="text-sm text-rose-300">
+  User not found or inactive.
+</div>
+{% else %}
+<div class="mb-4">
+  <h2 class="text-lg font-semibold text-slate-100">
+    {{ user.username }} <span class="text-slate-400 text-sm">({{ user.email }})</span>
+  </h2>
+  <p class="text-sm text-slate-400 mt-1">
+    Groups: {% if user.group_ids %}{{ user.group_ids | join(", ") }}{% else %}none{% endif %}
+  </p>
+</div>
+
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">Resource</th>
+        <th class="px-3 py-2 text-left">Address</th>
+        <th class="px-3 py-2 text-left">Decision</th>
+        <th class="px-3 py-2 text-left">Reason</th>
+        <th class="px-3 py-2 text-left">Matched policies</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for row in rows %}
+      <tr class="align-top hover:bg-slate-900/60">
+        <td class="px-3 py-2">
+          <div class="text-slate-100 font-medium">{{ row.resource_name }}</div>
+          <div class="text-xs text-slate-400">{{ row.resource_type }} / #{{ row.resource_id }}</div>
+        </td>
+        <td class="px-3 py-2 text-xs text-sky-300 font-mono">
+          {{ row.address }} / {{ row.protocol }}
+        </td>
+        <td class="px-3 py-2">
+          {% if row.decision == "allow" %}
+          <span class="inline-flex rounded-full bg-emerald-900/50 px-2 py-1 text-xs text-emerald-300">allow</span>
+          {% else %}
+          <span class="inline-flex rounded-full bg-rose-900/50 px-2 py-1 text-xs text-rose-300">deny</span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-2 text-xs text-slate-300">
+          {{ row.reason }}
+        </td>
+        <td class="px-3 py-2">
+          {% if row.matched_policies %}
+          <div class="space-y-2">
+            {% for policy in row.matched_policies %}
+            <div class="rounded border border-slate-800 bg-slate-900/50 px-2 py-2">
+              <div class="text-xs text-slate-100">
+                #{{ policy.id }} · {{ policy.name }}
+              </div>
+              <div class="text-xs text-slate-400 mt-1">
+                {{ policy.subject }} · {{ policy.effect }} · priority {{ policy.priority }}
+              </div>
+              {% if policy.conditions %}
+              <div class="text-xs text-slate-500 mt-1">
+                conditions: {{ policy.conditions }}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <span class="text-xs text-slate-500">No matching policies</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

@@ -1,0 +1,159 @@
+<div>
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-slate-100">{{ form_title }}</h2>
+    <button
+      class="text-xs text-slate-400 hover:text-white"
+      hx-get="/ui/policies/new"
+      hx-target="#policy-form-panel"
+      hx-swap="innerHTML"
+    >
+      Reset
+    </button>
+  </div>
+
+  {% set selected_subject_type = "user" %}
+  {% if policy and policy.group_id %}
+    {% set selected_subject_type = "group" %}
+  {% endif %}
+
+  <form
+    class="space-y-4"
+    hx-post="{{ form_action }}"
+    hx-target="#policies-table"
+    hx-swap="innerHTML"
+  >
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Name</label>
+      <input
+        type="text"
+        name="name"
+        value="{{ policy.name if policy else '' }}"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        placeholder="Allow CRM for ops"
+        required
+      />
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Description</label>
+      <textarea
+        name="description"
+        rows="3"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        placeholder="Optional description"
+      >{{ policy.description if policy else '' }}</textarea>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Subject type</label>
+      <select
+        name="subject_type"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+      >
+        <option value="user" {% if selected_subject_type == "user" %}selected{% endif %}>user</option>
+        <option value="group" {% if selected_subject_type == "group" %}selected{% endif %}>group</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">User</label>
+      <select
+        name="user_id"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+      >
+        <option value="">Select user</option>
+        {% for user in users %}
+        <option value="{{ user.id }}" {% if policy and policy.user_id == user.id %}selected{% endif %}>
+          {{ user.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Group</label>
+      <select
+        name="group_id"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+      >
+        <option value="">Select group</option>
+        {% for group in groups %}
+        <option value="{{ group.id }}" {% if policy and policy.group_id == group.id %}selected{% endif %}>
+          {{ group.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Resource</label>
+      <select
+        name="resource_id"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        required
+      >
+        <option value="">Select resource</option>
+        {% for resource in resources %}
+        <option value="{{ resource.id }}" {% if policy and policy.resource_id == resource.id %}selected{% endif %}>
+          {{ resource.name }} ({{ resource.resource_type }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm text-slate-300 mb-1">Effect</label>
+        <select
+          name="effect"
+          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        >
+          <option value="allow" {% if not policy or policy.effect == "allow" %}selected{% endif %}>allow</option>
+          <option value="deny" {% if policy and policy.effect == "deny" %}selected{% endif %}>deny</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-300 mb-1">Priority</label>
+        <input
+          type="number"
+          name="priority"
+          value="{{ policy.priority if policy else 100 }}"
+          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+          min="1"
+          required
+        />
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Conditions</label>
+      <textarea
+        name="conditions"
+        rows="3"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
+        placeholder='{"os_name":"Windows","time_range":"08:00-18:00"}'
+      >{{ policy.conditions if policy else '' }}</textarea>
+    </div>
+
+    <div class="flex items-center gap-2 pt-2">
+      <button
+        type="submit"
+        class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
+      >
+        {{ submit_label }}
+      </button>
+
+      <button
+        type="button"
+        class="px-3 py-2 rounded-md bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
+        hx-get="/ui/policies/table"
+        hx-target="#policies-table"
+        hx-swap="innerHTML"
+      >
+        Refresh table
+      </button>
+    </div>
+  </form>
+</div>
+

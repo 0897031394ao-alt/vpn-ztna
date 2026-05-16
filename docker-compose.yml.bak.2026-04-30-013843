@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vpnztna
+      POSTGRES_USER: vpnztna
+      POSTGRES_PASSWORD: changeme
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./api:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna
+      SECRET_KEY: dev-secret-change
+    depends_on:
+      - postgres
+
+  provision-worker:
+    build: ./api
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./api:/app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna
+      SECRET_KEY: dev-secret-change
+    depends_on:
+      - postgres
+      - wg-gateway
+    command: python -m app.workers.provision_pending
+
+  wg-gateway:
+    build: ./wg-gateway
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      WG_INTERFACE: wg0
+      WG_PORT: "51820"
+      WG_ADDRESS: 100.64.0.1/32
+      WG_PRIVATE_KEY_FILE: /data/server.key
+    volumes:
+      - ./wg-gateway/data:/data
+
+volumes:
+  postgres_data:

@@ -1,0 +1,57 @@
+<div id="resources-table-wrapper">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Address</th>
+        <th>Ports</th>
+        <th>Protocol</th>
+        <th>Active</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for resource in resources %}
+      <tr>
+        <td>{{ resource.id }}</td>
+        <td>{{ resource.name }}</td>
+        <td>{{ resource.resource_type }}</td>
+        <td>{{ resource.address }}</td>
+        <td>{{ resource.ports or '' }}</td>
+        <td>{{ resource.protocol }}</td>
+        <td>{{ 'yes' if resource.is_active else 'no' }}</td>
+        <td>
+          <button
+            type="button"
+            hx-get="/ui/resources/{{ resource.id }}/edit"
+            hx-target="#resource-form-container"
+            hx-swap="innerHTML"
+          >
+            Edit
+          </button>
+
+          <button
+            type="button"
+            hx-post="/ui/resources/{{ resource.id }}/delete"
+            hx-target="#resources-table-container"
+            hx-swap="innerHTML"
+            hx-confirm="Delete resource '{{ resource.name }}'?"
+            hx-target-4*="#resources-error-container"
+            hx-target-5*="#resources-error-container"
+            style="margin-left: 8px;"
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8">No resources found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+

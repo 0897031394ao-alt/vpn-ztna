@@ -1,0 +1,88 @@
+{% if peers %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>User ID</th>
+      <th>VPN IP</th>
+      <th>Allowed IPs</th>
+      <th>Status</th>
+      <th>Public Key</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for peer in peers %}
+    {% set status_raw = (peer.provisioning_status|string) %}
+    {% if '.' in status_raw %}
+      {% set status = status_raw.split('.')[-1] %}
+    {% else %}
+      {% set status = status_raw %}
+    {% endif %}
+
+    <tr>
+      <td>{{ peer.id }}</td>
+      <td>{{ peer.user_id }}</td>
+      <td>{{ peer.vpn_ip or "-" }}</td>
+
+      <td style="max-width: 420px;">
+        {% if peer.allowed_ips %}
+          {% set cidrs = peer.allowed_ips.split(',') %}
+          <div title="{{ peer.allowed_ips }}">
+            <strong>{{ cidrs|length }}</strong> route(s)
+          </div>
+          <div class="muted" style="margin-top:4px; word-break:break-all;">
+            {{ cidrs[:3] | join(', ') }}{% if cidrs|length > 3 %}, ...{% endif %}
+          </div>
+        {% else %}
+          <span class="muted">-</span>
+        {% endif %}
+      </td>
+
+      <td>
+        {% if status == "provisioned" %}
+          <span class="badge badge-ok">{{ status }}</span>
+        {% elif status == "pending" %}
+          <span class="badge badge-warn">{{ status }}</span>
+        {% elif status == "removed" %}
+          <span class="badge badge-err">{{ status }}</span>
+        {% else %}
+          <span class="badge badge-err">{{ status or "unknown" }}</span>
+        {% endif %}
+      </td>
+
+      <td style="max-width: 260px;">
+        <code style="word-break: break-all;">{{ peer.public_key }}</code>
+      </td>
+
+      <td>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <form
+            hx-post="/ui/peers/{{ peer.id }}/recalculate"
+            hx-target="#peers-table-container"
+            hx-swap="innerHTML"
+            style="margin:0;"
+          >
+            <button type="submit" class="btn btn-secondary">Recalculate</button>
+          </form>
+
+          <form
+            hx-post="/ui/peers/{{ peer.id }}/provision"
+            hx-target="#peers-table-container"
+            hx-swap="innerHTML"
+            style="margin:0;"
+          >
+            <button type="submit" class="btn">Provision</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card">
+  <h3>Peers not found</h3>
+  <div class="muted">API ответил пустым списком.</div>
+</div>
+{% endif %}

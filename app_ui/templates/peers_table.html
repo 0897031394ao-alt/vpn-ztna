@@ -1,0 +1,59 @@
+<table class="min-w-full text-sm border border-slate-800 rounded-md overflow-hidden">
+  <thead class="bg-slate-900 text-slate-300">
+    <tr>
+      <th class="px-3 py-2 text-left">ID</th>
+      <th class="px-3 py-2 text-left">User</th>
+      <th class="px-3 py-2 text-left">VPN IP</th>
+      <th class="px-3 py-2 text-left">AllowedIPs</th>
+      <th class="px-3 py-2 text-left">Status</th>
+      <th class="px-3 py-2 text-left">Actions</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+    {% for p in peers %}
+    <tr class="hover:bg-slate-900/60">
+      <td class="px-3 py-1.5 font-mono text-xs text-slate-300">{{ p.id }}</td>
+      <td class="px-3 py-1.5 text-slate-200">{{ p.user_id }}</td>
+      <td class="px-3 py-1.5 font-mono text-xs text-sky-300">{{ p.vpn_ip }}</td>
+      <td class="px-3 py-1.5 font-mono text-[11px] text-slate-300">
+        {{ p.allowed_ips }}
+      </td>
+      <td class="px-3 py-1.5 text-slate-200">
+        {% if p.provisioning_status == "provisioned" %}
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs">
+            {{ p.provisioning_status }}
+          </span>
+        {% else %}
+          <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs">
+            {{ p.provisioning_status }}
+          </span>
+        {% endif %}
+      </td>
+      <td class="px-3 py-1.5 space-x-2">
+        <button
+          class="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+          hx-post="/ui/peers/{{ p.id }}/recalculate"
+          hx-target="#peers-table"
+          hx-swap="outerHTML"
+        >
+          Recalculate
+        </button>
+        <button
+          class="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+          hx-post="/ui/peers/{{ p.id }}/provision"
+          hx-target="#peers-table"
+          hx-swap="outerHTML"
+        >
+          Provision
+        </button>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="6" class="px-3 py-3 text-sm text-slate-400">
+        No peers yet.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

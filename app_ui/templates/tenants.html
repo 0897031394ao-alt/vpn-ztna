@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-100">Tenants</h1>
+    <p class="text-sm text-slate-400 mt-1">Manage tenant records from the admin panel.</p>
+  </div>
+
+  <button
+    class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
+    hx-get="/ui/tenants/new"
+    hx-target="#tenant-form-panel"
+    hx-swap="innerHTML"
+  >
+    New tenant
+  </button>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+  <section class="xl:col-span-2">
+    <div
+      id="tenants-table"
+      hx-get="/ui/tenants/table"
+      hx-trigger="load"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+    >
+      <div class="text-sm text-slate-400">Loading tenants...</div>
+    </div>
+  </section>
+
+  <aside
+    id="tenant-form-panel"
+    class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 min-h-[240px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select “New tenant” or “Edit” to open the form here.
+    </div>
+  </aside>
+</div>
+{% endblock %}
+

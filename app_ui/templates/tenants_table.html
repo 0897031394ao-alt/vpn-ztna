@@ -1,0 +1,71 @@
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">Name</th>
+        <th class="px-3 py-2 text-left">Slug</th>
+        <th class="px-3 py-2 text-left">Status</th>
+        <th class="px-3 py-2 text-left">Created</th>
+        <th class="px-3 py-2 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for tenant in tenants %}
+      <tr class="hover:bg-slate-900/60">
+        <td class="px-3 py-2 text-slate-100 font-medium">{{ tenant.name }}</td>
+        <td class="px-3 py-2 text-slate-300 font-mono text-xs">{{ tenant.slug }}</td>
+        <td class="px-3 py-2">
+          {% if tenant.is_active %}
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs">
+            active
+          </span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs">
+            inactive
+          </span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-2 text-slate-400 text-xs">{{ tenant.created_at }}</td>
+        <td class="px-3 py-2">
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+              hx-get="/ui/tenants/{{ tenant.id }}/edit"
+              hx-target="#tenant-form-panel"
+              hx-swap="innerHTML"
+            >
+              Edit
+            </button>
+
+            <button
+              class="px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+              hx-post="/ui/tenants/{{ tenant.id }}/toggle"
+              hx-target="#tenants-table"
+              hx-swap="innerHTML"
+            >
+              {% if tenant.is_active %}Disable{% else %}Enable{% endif %}
+            </button>
+
+            <button
+              class="px-2 py-1 rounded bg-rose-900/70 text-rose-200 text-xs hover:bg-rose-800"
+              hx-post="/ui/tenants/{{ tenant.id }}/delete"
+              hx-target="#tenants-table"
+              hx-swap="innerHTML"
+              hx-confirm="Delete tenant '{{ tenant.name }}'?"
+            >
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-3 py-8 text-center text-slate-400">
+          No tenants yet.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+

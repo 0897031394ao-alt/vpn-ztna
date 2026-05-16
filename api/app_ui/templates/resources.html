@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Resources · VPN-ZTNA{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div>
+    <h1>Resources</h1>
+    <div class="muted">Управление ресурсами через HTMX fragments.</div>
+  </div>
+  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
+</div>
+
+<div class="card">
+  <div class="toolbar" style="margin-bottom:12px;">
+    <div>
+      <h2>Resource Catalog</h2>
+      <div class="muted">Таблица и формы подгружаются без перезагрузки страницы.</div>
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-primary"
+      hx-get="/ui/resources/new"
+      hx-target="#resource-form-container"
+      hx-swap="innerHTML"
+      hx-target-4*="#resources-error-container"
+      hx-target-5*="#resources-error-container"
+    >
+      New resource
+    </button>
+  </div>
+
+  <div id="resources-error-container" style="margin-bottom:16px;"></div>
+
+  <div
+    id="resources-table-container"
+    hx-get="/ui/resources/table"
+    hx-trigger="load"
+    hx-target="#resources-table-container"
+    hx-swap="innerHTML"
+  >
+    Loading resources table...
+  </div>
+
+  <div id="resource-form-container" style="margin-top:16px;"></div>
+</div>
+{% endblock %}
+
