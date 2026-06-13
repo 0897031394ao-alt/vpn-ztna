@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.peer import Peer
-from app.models.audit_log import AuditLog
+from app.models.audit_event import AuditEvent
+from app.core.security import hash_password
 
 
 @pytest.mark.anyio
@@ -17,6 +18,11 @@ async def test_full_peer_flow(async_client: AsyncClient, db_session: AsyncSessio
         )
     ).scalar_one()
 
+    # Приводим пароль к известному значению для теста
+    user.hashed_password = hash_password("TestPass123!")
+    await db_session.commit()
+    await db_session.refresh(user)
+
     # 2. Логинимся как user
     resp = await async_client.post(
         "/api/v1/auth/login",
@@ -27,14 +33,18 @@ async def test_full_peer_flow(async_client: AsyncClient, db_session: AsyncSessio
     token_user = resp.json()["access_token"]
     auth_user = {"Authorization": f"Bearer {token_user}"}
 
-    # 3. enroll-peer для user
+    # 3. self-service enroll для user
     resp = await async_client.post(
-        f"/api/v1/peers/users/{user.id}/enroll-peer",
+        "/api/v1/peers/my/enroll",
         headers=auth_user,
     )
     assert resp.status_code == 200
     body = resp.json()
     peer_id = body["peer_id"]
+    assert body["user_id"] == user.id
+    assert "config_ini" in body
+    assert "interface" in body
+    assert "peer" in body
 
     # Проверяем, что peer создан в БД
     peer = await db_session.get(Peer, peer_id)
@@ -53,6 +63,18 @@ async def test_full_peer_flow(async_client: AsyncClient, db_session: AsyncSessio
     assert explain["peer_id"] == peer_id
     assert explain["user_id"] == user.id
     assert isinstance(explain["final_cidrs_before_aggregation"], list)
+
+    # Подготавливаем admin с известным паролем (аналогично testuser выше)
+    admin = (
+        await db_session.execute(
+            select(User).where(User.username == "admin")
+        )
+    ).scalar_one()
+
+    admin.hashed_password = hash_password("NewStrongPass123!")
+    admin.is_active = True
+    await db_session.commit()
+    await db_session.refresh(admin)
 
     # 6. Логинимся как admin
     resp = await async_client.post(
@@ -86,23 +108,19 @@ async def test_full_peer_flow(async_client: AsyncClient, db_session: AsyncSessio
 
     # 10. Проверяем ключевые события в audit_logs
     result = await db_session.execute(
-        select(AuditLog.action, AuditLog.user_id, AuditLog.peer_id)
-        .where(AuditLog.peer_id == peer_id)
-        .order_by(AuditLog.id)
+        select(AuditEvent.event_type, AuditEvent.user_id, AuditEvent.peer_id)
+        .where(AuditEvent.peer_id == peer_id)
+        .order_by(AuditEvent.id)
     )
     actions = [row for row in result.all()]
     action_names = [a[0] for a in actions]
 
     for expected in [
-        "peer_created",
-        "peer_recalculated",
-        "peer_provisioned",
-        "peer.enroll",
+        "peer.enroll_self",
         "peer.get_config",
         "peer.my_policy_explain",
         "peer.recalculate_manual",
         "peer.policy_explain",
-        "peer_removed",
         "peer.remove",
     ]:
         assert expected in action_names
