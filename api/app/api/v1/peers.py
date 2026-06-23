@@ -53,13 +53,11 @@ async def enroll_peer_for_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin_or_self),
 ):
-    """
-    Полный флоу для пользователя:
-    1) сгенерировать peer (ключи + запись в БД),
-    2) пересчитать allowed_ips по политикам,
-    3) отправить peer в wg-gateway,
-    4) вернуть готовый WireGuard-конфиг.
-    """
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions to enroll peer for another user",
+        )
 
     peer = await register_peer_for_user(db, user_id)
     peer = await recalculate_peer_by_id(db, peer.id)
@@ -233,14 +231,14 @@ async def enroll_my_peer(
 # Админский список всех peers
 @router.get("/", response_model=List[PeerRead])
 async def list_peers_endpoint(
-    status: Optional[ProvisioningStatus] = Query(default=None),
+    filter_status: Optional[ProvisioningStatus] = Query(default=None, alias="status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin),
 ):
     stmt = select(Peer)
 
-    if status is not None:
-        stmt = stmt.where(Peer.provisioning_status == status)
+    if filter_status is not None:
+        stmt = stmt.where(Peer.provisioning_status == filter_status)
 
     stmt = stmt.order_by(Peer.id)
     result = await db.execute(stmt)
@@ -287,6 +285,142 @@ async def peers_stats_endpoint(
             stats["total"] += count
 
     return PeerStatsRead(**stats)
+
+
+@router.get("/my/config")
+async def get_my_config(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Вернуть WireGuard-конфиг для текущего пользователя.
+    Формат: text/plain, как готовый .conf.
+    """
+
+    stmt = (
+        select(Peer)
+        .where(
+            Peer.user_id == current_user.id,
+            Peer.provisioning_status == ProvisioningStatus.provisioned,
+        )
+        .order_by(Peer.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    peer = result.scalars().first()
+
+    if peer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No peer found for current user",
+        )
+
+    await log_event(
+        db,
+        action="peer.get_config",
+        current_user=current_user,
+        peer=peer,
+        details={
+            "user_id": peer.user_id,
+            "peer_id": peer.id,
+            "vpn_ip": peer.vpn_ip,
+        },
+        request=request,
+    )
+
+    await db.commit()
+
+    config_text = build_client_config_for_peer(peer)
+
+    return Response(
+        content=config_text,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": 'attachment; filename="wg0.conf"',
+        },
+    )
+
+
+@router.get("/my/policy-explain")
+async def explain_my_policies(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Вернуть объяснение, почему у текущего пользователя такие AllowedIPs.
+    Берём последний provisioned peer этого пользователя.
+    """
+
+    stmt = (
+        select(Peer)
+        .where(
+            Peer.user_id == current_user.id,
+            Peer.provisioning_status == ProvisioningStatus.provisioned,
+        )
+        .order_by(Peer.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    peer = result.scalars().first()
+
+    if peer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No provisioned peer found for current user",
+        )
+
+    final_cidrs, steps = await _simulate_policies_for_peer(db, peer)
+
+    allowed_steps = [s for s in steps if str(s.effect).lower() == "allow"]
+    denied_steps = [s for s in steps if str(s.effect).lower() == "deny"]
+
+    has_full_internet_access = "0.0.0.0/0" in final_cidrs
+    effective_access_mode = "full_tunnel" if has_full_internet_access else "split_tunnel"
+
+    await log_event(
+        db,
+        action="peer.my_policy_explain",
+        current_user=current_user,
+        peer=peer,
+        details={
+            "user_id": peer.user_id,
+            "peer_id": peer.id,
+            "vpn_ip": peer.vpn_ip,
+            "final_cidrs_count": len(final_cidrs),
+            "steps_count": len(steps),
+        },
+        request=request,
+    )
+
+    await db.commit()
+
+    return {
+        "peer_id": peer.id,
+        "user_id": peer.user_id,
+        "vpn_ip": peer.vpn_ip,
+        "summary": {
+            "effective_access_mode": effective_access_mode,
+            "has_full_internet_access": has_full_internet_access,
+            "allowed_count": len(final_cidrs),
+            "allowed_policies_count": len(allowed_steps),
+            "denied_policies_count": len(denied_steps),
+        },
+        "final_cidrs_before_aggregation": final_cidrs,
+        "steps": [
+            {
+                "policy_id": s.policy_id,
+                "name": s.name,
+                "scope": s.scope,
+                "effect": s.effect,
+                "resource_cidr": s.resource_cidr,
+                "before": s.before,
+                "after": s.after,
+            }
+            for s in steps
+        ],
+    }
 
 
 # Админский пересчёт AllowedIPs и статуса peer
@@ -384,7 +518,7 @@ async def retry_peer_endpoint(
     return peer
 
 
-@router.delete("/{peer_id}", response_model=PeerRead)
+@router.delete("/{peer_id}", response_model=PeerRead, status_code=202)
 async def remove_peer_endpoint(
     peer_id: int,
     request: Request,
@@ -446,144 +580,6 @@ async def debug_provision_peer_endpoint(
     }
 
 
-@router.get("/my/config")
-async def get_my_config(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Вернуть WireGuard-конфиг для текущего пользователя.
-    Формат: text/plain, как готовый .conf.
-    """
-
-    # Находим любой активный peer пользователя (можно уточнить критерии позже)
-    stmt = (
-        select(Peer)
-        .where(
-            Peer.user_id == current_user.id,
-            Peer.provisioning_status == ProvisioningStatus.provisioned,
-        )
-        .order_by(Peer.id.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    peer = result.scalars().first()
-
-    if peer is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No peer found for current user",
-        )
-
-    await log_event(
-        db,
-        action="peer.get_config",
-        current_user=current_user,
-        peer=peer,
-        details={
-            "user_id": peer.user_id,
-            "peer_id": peer.id,
-            "vpn_ip": peer.vpn_ip,
-        },
-        request=request,
-    )
-
-    await db.commit()
-
-    config_text = build_client_config_for_peer(peer)
-
-    return Response(
-        content=config_text,
-        media_type="text/plain",
-        headers={
-            "Content-Disposition": 'attachment; filename="wg0.conf"',
-        },
-    )
-
-
-@router.get("/my/policy-explain")
-async def explain_my_policies(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Вернуть объяснение, почему у текущего пользователя такие AllowedIPs.
-    Берём последний provisioned peer этого пользователя.
-    """
-
-    stmt = (
-        select(Peer)
-        .where(
-            Peer.user_id == current_user.id,
-            Peer.provisioning_status == ProvisioningStatus.provisioned,
-        )
-        .order_by(Peer.id.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    peer = result.scalars().first()
-
-    if peer is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No provisioned peer found for current user",
-        )
-
-    final_cidrs, steps = await _simulate_policies_for_peer(db, peer)
-
-    # Агрегированная сводка по политикам
-    allowed_steps = [s for s in steps if str(s.effect).lower() == "allow"]
-    denied_steps = [s for s in steps if str(s.effect).lower() == "deny"]
-
-    has_full_internet_access = "0.0.0.0/0" in final_cidrs
-    effective_access_mode = "full_tunnel" if has_full_internet_access else "split_tunnel"
-
-    await log_event(
-        db,
-        action="peer.my_policy_explain",
-        current_user=current_user,
-        peer=peer,
-        details={
-            "user_id": peer.user_id,
-            "peer_id": peer.id,
-            "vpn_ip": peer.vpn_ip,
-            "final_cidrs_count": len(final_cidrs),
-            "steps_count": len(steps),
-        },
-        request=request,
-    )
-
-    await db.commit()
-
-    return {
-        "peer_id": peer.id,
-        "user_id": peer.user_id,
-        "vpn_ip": peer.vpn_ip,
-        "summary": {
-            "effective_access_mode": effective_access_mode,
-            "has_full_internet_access": has_full_internet_access,
-            "allowed_count": len(final_cidrs),
-            "allowed_policies_count": len(allowed_steps),
-            "denied_policies_count": len(denied_steps),
-        },
-        "final_cidrs_before_aggregation": final_cidrs,
-        "steps": [
-            {
-                "policy_id": s.policy_id,
-                "name": s.name,
-                "scope": s.scope,
-                "effect": s.effect,
-                "resource_cidr": s.resource_cidr,
-                "before": s.before,
-                "after": s.after,
-            }
-            for s in steps
-        ],
-    }
-
-
 @router.get("/{peer_id}/config")
 async def get_peer_config_endpoint(
     peer_id: int,
@@ -618,7 +614,6 @@ async def explain_peer_policies(
 
     final_cidrs, steps = await _simulate_policies_for_peer(db, peer)
 
-    # Агрегированная сводка по политикам
     allowed_steps = [s for s in steps if str(s.effect).lower() == "allow"]
     denied_steps = [s for s in steps if str(s.effect).lower() == "deny"]
 
@@ -667,3 +662,5 @@ async def explain_peer_policies(
             for s in steps
         ],
     }
+
+
