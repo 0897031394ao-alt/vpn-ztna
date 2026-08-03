@@ -1,62 +1,205 @@
-<div class="rounded-xl border border-slate-800 overflow-hidden">
-  <table class="min-w-full text-sm">
-    <thead class="bg-slate-900 text-slate-300">
-      <tr>
-        <th class="px-3 py-2 text-left">Priority</th>
-        <th class="px-3 py-2 text-left">Name</th>
-        <th class="px-3 py-2 text-left">Subject</th>
-        <th class="px-3 py-2 text-left">Resource</th>
-        <th class="px-3 py-2 text-left">Effect</th>
-        <th class="px-3 py-2 text-left">Conditions</th>
-        <th class="px-3 py-2 text-left">Actions</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
-      {% for policy in policies %}
-      <tr class="hover:bg-slate-900/60">
-        <td class="px-3 py-2 text-slate-300 font-mono text-xs">{{ policy.priority }}</td>
-        <td class="px-3 py-2 text-slate-100 font-medium">{{ policy.name }}</td>
-        <td class="px-3 py-2 text-slate-300 text-xs">{{ policy.subject_label }}</td>
-        <td class="px-3 py-2 text-sky-300 text-xs">{{ policy.resource_label }}</td>
-        <td class="px-3 py-2">
-          {% if policy.effect == "allow" %}
-          <span class="inline-flex rounded-full bg-emerald-900/50 px-2 py-1 text-xs text-emerald-300">allow</span>
-          {% else %}
-          <span class="inline-flex rounded-full bg-rose-900/50 px-2 py-1 text-xs text-rose-300">deny</span>
-          {% endif %}
-        </td>
-        <td class="px-3 py-2 text-slate-400 text-xs">{{ policy.conditions or "—" }}</td>
-        <td class="px-3 py-2">
-          <div class="flex flex-wrap gap-2">
-            <button
-              class="px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
-              hx-get="/ui/policies/{{ policy.id }}/edit"
-              hx-target="#policy-form-panel"
-              hx-swap="innerHTML"
-            >
-              Edit
-            </button>
+{% macro pagination(page, total_pages, limit, status, total, policies) %}
+<div class="mb-3 flex items-center justify-between text-xs text-slate-400">
+  <button
+    {% if page <= 1 %}disabled{% endif %}
+    hx-get="/ui/policies/table?page={{ page - 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-target="#policies-table"
+    hx-swap="innerHTML"
+    class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+  >
+    Prev
+  </button>
 
-            <button
-              class="px-2 py-1 rounded bg-rose-900/70 text-rose-200 text-xs hover:bg-rose-800"
-              hx-post="/ui/policies/{{ policy.id }}/delete"
-              hx-target="#policies-table"
-              hx-swap="innerHTML"
-              hx-confirm="Disable policy '{{ policy.name }}'?"
-            >
-              Disable
-            </button>
-          </div>
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="7" class="px-3 py-8 text-center text-slate-400">
-          No policies yet.
-        </td>
-      </tr>
+  <div class="flex items-center gap-3">
+    <span>
+      Showing {{ policies|length }} of {{ total }} policy(s)
+    </span>
+
+    <div class="inline-flex items-center gap-1">
+      {% set current_page = page %}
+      {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+      {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+      {% if start_page > 1 %}
+        <button
+          class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+          hx-get="/ui/policies/table?page=1&limit={{ limit }}&status={{ status }}"
+          hx-target="#policies-table"
+          hx-swap="innerHTML"
+        >
+          1
+        </button>
+        {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+        {% endif %}
+      {% endif %}
+
+      {% for p in range(start_page, end_page + 1) %}
+        <button
+          class="px-1.5 py-0.5 rounded {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
+          hx-get="/ui/policies/table?page={{ p }}&limit={{ limit }}&status={{ status }}"
+          hx-target="#policies-table"
+          hx-swap="innerHTML"
+        >
+          {{ p }}
+        </button>
       {% endfor %}
-    </tbody>
-  </table>
-</div>
 
+      {% if end_page < total_pages %}
+        {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+        {% endif %}
+        <button
+          class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+          hx-get="/ui/policies/table?page={{ total_pages }}&limit={{ limit }}&status={{ status }}"
+          hx-target="#policies-table"
+          hx-swap="innerHTML"
+        >
+          {{ total_pages }}
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <button
+    {% if page >= total_pages %}disabled{% endif %}
+    hx-get="/ui/policies/table?page={{ page + 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-target="#policies-table"
+    hx-swap="innerHTML"
+    class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
+{% endmacro %}
+
+<div class="space-y-3">
+  <div class="flex items-center justify-between gap-4">
+    <div class="text-sm text-slate-400">
+      Showing status:
+      <span class="font-medium text-slate-200">{{ status|capitalize }}</span>
+      · {{ total }} policy(s)
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Rows</span>
+        <select
+          name="limit"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/policies/table"
+          hx-target="#policies-table"
+          hx-swap="innerHTML"
+          hx-trigger="change"
+          hx-vals='{"page": 1}'
+          hx-include="[name='status']"
+        >
+          {% for option in [5, 10, 20, 50, 100] %}
+            <option value="{{ option }}" {% if limit == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Status</span>
+        <select
+          name="status"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/policies/table"
+          hx-target="#policies-table"
+          hx-swap="innerHTML"
+          hx-trigger="change"
+          hx-vals='{"page": 1}'
+          hx-include="[name='limit']"
+        >
+          <option value="active" {% if status == "active" %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Inactive</option>
+          <option value="all" {% if status == "all" %}selected{% endif %}>All</option>
+        </select>
+      </label>
+
+      <button
+        class="rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+        hx-get="/ui/policies/table?page={{ page }}&limit={{ limit }}&status={{ status }}"
+        hx-target="#policies-table"
+        hx-swap="innerHTML"
+      >
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  {{ pagination(page, total_pages, limit, status, total, policies) }}
+
+  <div class="overflow-hidden rounded-xl border border-slate-800">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">Priority</th>
+          <th class="px-4 py-3 text-left">Name</th>
+          <th class="px-4 py-3 text-left">Subject</th>
+          <th class="px-4 py-3 text-left">Resource</th>
+          <th class="px-4 py-3 text-left">Effect</th>
+          <th class="px-4 py-3 text-left">Conditions</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700">
+        {% for policy in policies %}
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="px-4 py-3 font-mono text-slate-400">{{ policy.priority }}</td>
+          <td class="px-4 py-3 font-medium text-slate-100">{{ policy.name }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ policy.subject_label or "—" }}</td>
+          <td class="px-4 py-3 text-cyan-300">{{ policy.resource_label or "—" }}</td>
+          <td class="px-4 py-3">
+            {% if policy.effect == "allow" %}
+            <span class="inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300">
+              allow
+            </span>
+            {% else %}
+            <span class="inline-flex rounded-full bg-rose-500/15 px-2.5 py-1 text-xs font-medium text-rose-300">
+              deny
+            </span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-slate-400">{{ policy.conditions or "—" }}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-500/20"
+                hx-get="/ui/policies/{{ policy.id }}/edit"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+              >
+                Edit
+              </button>
+
+              {% if policy.is_active %}
+              <button
+                class="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                hx-delete="/ui/policies/{{ policy.id }}"
+                hx-target="#policies-table"
+                hx-swap="innerHTML"
+                hx-confirm="Disable policy '{{ policy.name }}'?"
+              >
+                Disable
+              </button>
+              {% else %}
+              <span class="inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400">
+                Inactive
+              </span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-6 text-center text-slate-500">No policies found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {{ pagination(page, total_pages, limit, status, total, policies) }}
+</div>

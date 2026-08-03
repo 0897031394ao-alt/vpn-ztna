@@ -1,67 +1,86 @@
-<div>
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-lg font-semibold text-slate-100">{{ form_title }}</h2>
-    <button
-      class="text-xs text-slate-400 hover:text-white"
-      hx-get="/ui/tenants/new"
-      hx-target="#tenant-form-panel"
-      hx-swap="innerHTML"
-    >
-      Reset
-    </button>
-  </div>
-
-  <form
-    class="space-y-4"
-    hx-post="{{ form_action }}"
-    hx-target="#tenants-table"
-    hx-swap="innerHTML"
-  >
-    <div>
-      <label class="block text-sm text-slate-300 mb-1">Name</label>
-      <input
-        type="text"
-        name="name"
-        value="{{ tenant.name if tenant else '' }}"
-        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
-        placeholder="Acme Corp"
-        required
-      />
-    </div>
-
-    <div>
-      <label class="block text-sm text-slate-300 mb-1">Slug</label>
-      <input
-        type="text"
-        name="slug"
-        value="{{ tenant.slug if tenant else '' }}"
-        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500"
-        placeholder="acme"
-        required
-      />
-      <p class="mt-1 text-xs text-slate-500">
-        Slug should be unique and URL-safe.
-      </p>
-    </div>
-
-    <div class="flex items-center gap-2 pt-2">
-      <button
-        type="submit"
-        class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
-      >
-        {{ submit_label }}
-      </button>
-
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+  
+>
+  <div class="w-full max-w-xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">{{ form_title }}</h2>
+        <p class="mt-1 text-sm text-slate-400">
+          Manage tenant details for the VPN-ZTNA platform.
+        </p>
+      </div>
       <button
         type="button"
-        class="px-3 py-2 rounded-md bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
-        hx-get="/ui/tenants/table"
-        hx-target="#tenants-table"
-        hx-swap="innerHTML"
+        class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
+        onclick="document.getElementById('modal-root').innerHTML='';"
       >
-        Refresh table
+        Close
       </button>
     </div>
-  </form>
-</div>
 
+    <form
+      class="space-y-4 px-6 py-5"
+      hx-post="{{ form_action }}"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.xhr.status < 400){ document.getElementById('modal-root').innerHTML=''; }"
+    >
+      <input type="hidden" name="page" value="{{ request.query_params.get('page', 1) }}">
+      <input type="hidden" name="limit" value="{{ request.query_params.get('limit', 20) }}">
+      <input type="hidden" name="status" value="{{ request.query_params.get('status', 'active') }}">
+      <div>
+        <label class="block text-sm text-slate-300 mb-1">Name</label>
+        <input
+          type="text"
+          name="name"
+          value="{{ tenant.name if tenant else '' }}"
+          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          placeholder="Acme Corp"
+          required
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm text-slate-300 mb-1">Slug</label>
+        <input
+          type="text"
+          name="slug"
+          value="{{ tenant.slug if tenant else '' }}"
+          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          placeholder="acme"
+          required
+        />
+        <p class="mt-1 text-xs text-slate-500">
+          Slug should be unique and URL-safe.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+        <input
+          type="checkbox"
+          name="isactive"
+          {% if tenant is none or tenant.is_active %}checked{% endif %}
+          class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+        />
+        <span class="text-sm text-slate-300">Active tenant</span>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+        <button
+          type="button"
+          class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+          onclick="document.getElementById('modal-root').innerHTML='';"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+        >
+          {{ submit_label }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

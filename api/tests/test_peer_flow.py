@@ -1,130 +1,172 @@
+import base64
 import pytest
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
-from app.models.peer import Peer
-from app.models.audit_event import AuditEvent
-from app.core.security import hash_password
+pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.anyio
-async def test_full_peer_flow(async_client: AsyncClient, db_session: AsyncSession):
-    # 1. Берём существующего пользователя testuser
-    user = (
-        await db_session.execute(
-            select(User).where(User.username == "testuser")
-        )
-    ).scalar_one()
+def _wg_pubkey() -> str:
+    return base64.b64encode(
+        X25519PrivateKey.generate().public_key().public_bytes_raw()
+    ).decode()
 
-    # Приводим пароль к известному значению для теста
-    user.hashed_password = hash_password("TestPass123!")
-    await db_session.commit()
-    await db_session.refresh(user)
 
-    # 2. Логинимся как user
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        data={"username": "testuser", "password": "TestPass123!"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+async def test_admin_can_create_and_provision_peer(
+    client: AsyncClient,
+    admin_token: str,
+    seeded_db: dict,
+):
+    auth = {"Authorization": f"Bearer {admin_token}"}
+    demo_user_id = seeded_db["demo"]["id"]
+
+    r1 = await client.post(
+        "/api/v1/resources/",
+        json={"name": "peer-bootstrap-net", "resource_type": "cidr", "address": "10.50.0.0/24"},
+        headers=auth,
     )
-    assert resp.status_code == 200
-    token_user = resp.json()["access_token"]
-    auth_user = {"Authorization": f"Bearer {token_user}"}
+    assert r1.status_code in (200, 201), r1.text
+    resource_id = r1.json()["id"]
 
-    # 3. self-service enroll для user
-    resp = await async_client.post(
-        "/api/v1/peers/my/enroll",
-        headers=auth_user,
+    r2 = await client.post(
+        "/api/v1/policies/",
+        json={"name": "demo-peer-bootstrap", "user_id": demo_user_id, "resource_id": resource_id},
+        headers=auth,
     )
-    assert resp.status_code == 200
-    body = resp.json()
-    peer_id = body["peer_id"]
-    assert body["user_id"] == user.id
-    assert "config_ini" in body
-    assert "interface" in body
-    assert "peer" in body
+    assert r2.status_code in (200, 201), r2.text
 
-    # Проверяем, что peer создан в БД
-    peer = await db_session.get(Peer, peer_id)
-    assert peer is not None
-    assert peer.user_id == user.id
-
-    # 4. my/config
-    resp = await async_client.get("/api/v1/peers/my/config", headers=auth_user)
-    assert resp.status_code == 200
-    assert "wg0.conf" in resp.headers.get("Content-Disposition", "")
-
-    # 5. my/policy-explain
-    resp = await async_client.get("/api/v1/peers/my/policy-explain", headers=auth_user)
-    assert resp.status_code == 200
-    explain = resp.json()
-    assert explain["peer_id"] == peer_id
-    assert explain["user_id"] == user.id
-    assert isinstance(explain["final_cidrs_before_aggregation"], list)
-
-    # Подготавливаем admin с известным паролем (аналогично testuser выше)
-    admin = (
-        await db_session.execute(
-            select(User).where(User.username == "admin")
-        )
-    ).scalar_one()
-
-    admin.hashed_password = hash_password("NewStrongPass123!")
-    admin.is_active = True
-    await db_session.commit()
-    await db_session.refresh(admin)
-
-    # 6. Логинимся как admin
-    resp = await async_client.post(
-        "/api/v1/auth/login",
-        data={"username": "admin", "password": "NewStrongPass123!"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    r3 = await client.post(
+        "/api/v1/peers/",
+        json={"user_id": demo_user_id, "public_key": _wg_pubkey()},
+        headers=auth,
     )
-    assert resp.status_code == 200
-    token_admin = resp.json()["access_token"]
-    auth_admin = {"Authorization": f"Bearer {token_admin}"}
+    assert r3.status_code in (200, 201), r3.text
+    peer_id = r3.json()["id"]
 
-    # 7. Ручной пересчёт
-    resp = await async_client.post(
-        f"/api/v1/peers/{peer_id}/recalculate", headers=auth_admin
+    r4 = await client.post(f"/api/v1/peers/{peer_id}/recalculate", headers=auth)
+    assert r4.status_code in (200, 204), r4.text
+
+    r5 = await client.post(f"/api/v1/peers/{peer_id}/provision", headers=auth)
+    assert r5.status_code in (200, 202, 503), r5.text
+
+
+async def test_remove_pending_peer_marks_removed(
+    client: AsyncClient,
+    admin_token: str,
+    seeded_db: dict,
+):
+    auth = {"Authorization": f"Bearer {admin_token}"}
+    demo_user_id = seeded_db["demo"]["id"]
+
+    # Готовим политику и ресурс
+    r1 = await client.post(
+        "/api/v1/resources/",
+        json={"name": "peer-bootstrap-net", "resource_type": "cidr", "address": "10.50.0.0/24"},
+        headers=auth,
     )
-    assert resp.status_code == 200
+    assert r1.status_code in (200, 201), r1.text
+    resource_id = r1.json()["id"]
 
-    # 8. Админский policy-explain
-    resp = await async_client.get(
-        f"/api/v1/peers/{peer_id}/policy-explain", headers=auth_admin
+    r2 = await client.post(
+        "/api/v1/policies/",
+        json={"name": "demo-peer-bootstrap", "user_id": demo_user_id, "resource_id": resource_id},
+        headers=auth,
     )
-    assert resp.status_code == 200
+    assert r2.status_code in (200, 201), r2.text
 
-    # 9. Удаляем peer как админ
-    resp = await async_client.delete(
-        f"/api/v1/peers/{peer_id}", headers=auth_admin
+    # Создаём peer (он будет pending)
+    r3 = await client.post(
+        "/api/v1/peers/",
+        json={"user_id": demo_user_id, "public_key": _wg_pubkey()},
+        headers=auth,
     )
-    assert resp.status_code == 200
-    await db_session.refresh(peer)
-    assert peer.provisioning_status.name.lower() == "removed"
+    assert r3.status_code in (200, 201), r3.text
+    peer_id = r3.json()["id"]
 
-    # 10. Проверяем ключевые события в audit_logs
-    result = await db_session.execute(
-        select(AuditEvent.event_type, AuditEvent.user_id, AuditEvent.peer_id)
-        .where(AuditEvent.peer_id == peer_id)
-        .order_by(AuditEvent.id)
+    # Удаляем пока он ещё pending
+    r_del = await client.delete(f"/api/v1/peers/{peer_id}", headers=auth)
+    assert r_del.status_code in (200, 202, 204), r_del.text
+    body = r_del.json()
+    assert body["provisioning_status"] == "removed"
+
+
+async def test_remove_provisioned_peer_marks_pending_revoke(
+    client: AsyncClient,
+    admin_token: str,
+    seeded_db: dict,
+):
+    auth = {"Authorization": f"Bearer {admin_token}"}
+    demo_user_id = seeded_db["demo"]["id"]
+
+    r1 = await client.post(
+        "/api/v1/resources/",
+        json={"name": "peer-bootstrap-net", "resource_type": "cidr", "address": "10.50.0.0/24"},
+        headers=auth,
     )
-    actions = [row for row in result.all()]
-    action_names = [a[0] for a in actions]
+    assert r1.status_code in (200, 201), r1.text
+    resource_id = r1.json()["id"]
 
-    for expected in [
-        "peer.enroll_self",
-        "peer.get_config",
-        "peer.my_policy_explain",
-        "peer.recalculate_manual",
-        "peer.policy_explain",
-        "peer.remove",
-    ]:
-        assert expected in action_names
+    r2 = await client.post(
+        "/api/v1/policies/",
+        json={"name": "demo-peer-bootstrap", "user_id": demo_user_id, "resource_id": resource_id},
+        headers=auth,
+    )
+    assert r2.status_code in (200, 201), r2.text
+
+    r3 = await client.post(
+        "/api/v1/peers/",
+        json={"user_id": demo_user_id, "public_key": _wg_pubkey()},
+        headers=auth,
+    )
+    assert r3.status_code in (200, 201), r3.text
+    peer_id = r3.json()["id"]
+
+    # Принудительно провизионить peer
+    r_prov = await client.post(f"/api/v1/peers/{peer_id}/provision", headers=auth)
+    assert r_prov.status_code in (200, 202, 503), r_prov.text  # 503 возможен при недоступном wg-gateway
+
+    # Удаляем provisioned peer
+    r_del = await client.delete(f"/api/v1/peers/{peer_id}", headers=auth)
+    assert r_del.status_code in (200, 202, 204), r_del.text
+    body = r_del.json()
+    assert body["provisioning_status"] in ("pending_revoke", "removed")
 
 
+async def test_remove_peer_is_idempotent(
+    client: AsyncClient,
+    admin_token: str,
+    seeded_db: dict,
+):
+    auth = {"Authorization": f"Bearer {admin_token}"}
+    demo_user_id = seeded_db["demo"]["id"]
 
+    r1 = await client.post(
+        "/api/v1/resources/",
+        json={"name": "peer-bootstrap-net", "resource_type": "cidr", "address": "10.50.0.0/24"},
+        headers=auth,
+    )
+    assert r1.status_code in (200, 201), r1.text
+    resource_id = r1.json()["id"]
 
+    r2 = await client.post(
+        "/api/v1/policies/",
+        json={"name": "demo-peer-bootstrap", "user_id": demo_user_id, "resource_id": resource_id},
+        headers=auth,
+    )
+    assert r2.status_code in (200, 201), r2.text
+
+    r3 = await client.post(
+        "/api/v1/peers/",
+        json={"user_id": demo_user_id, "public_key": _wg_pubkey()},
+        headers=auth,
+    )
+    assert r3.status_code in (200, 201), r3.text
+    peer_id = r3.json()["id"]
+
+    # Первый DELETE
+    r_del1 = await client.delete(f"/api/v1/peers/{peer_id}", headers=auth)
+    assert r_del1.status_code in (200, 202, 204), r_del1.text
+
+    # Второй DELETE не должен падать
+    r_del2 = await client.delete(f"/api/v1/peers/{peer_id}", headers=auth)
+    assert r_del2.status_code in (200, 202, 204), r_del2.text

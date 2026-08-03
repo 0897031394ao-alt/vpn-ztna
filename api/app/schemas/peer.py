@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Optional
 
 import base64
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ProvisioningStatus(str, Enum):
@@ -11,13 +11,15 @@ class ProvisioningStatus(str, Enum):
     provisioned = "provisioned"
     error = "error"
     removed = "removed"
+    pending_revoke = "pending_revoke"
 
 
 class PeerBase(BaseModel):
     user_id: int
     public_key: str
 
-    @validator("public_key")
+    @field_validator("public_key")
+    @classmethod
     def validate_public_key(cls, v: str) -> str:
         try:
             decoded = base64.b64decode(v, validate=True)
@@ -37,7 +39,8 @@ class PeerCreate(PeerBase):
 class PeerUpdate(BaseModel):
     public_key: Optional[str] = None
 
-    @validator("public_key")
+    @field_validator("public_key")
+    @classmethod
     def validate_public_key(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
@@ -63,14 +66,14 @@ class PeerRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PeerStatsRead(BaseModel):
     pending: int
     provisioned: int
     error: int
+    pending_revoke: int
     removed: int
     total: int
 

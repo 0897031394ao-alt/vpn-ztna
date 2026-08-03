@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin
+from app.models.user import User
 from app.db.session import get_db
 from app.models.resource import Resource
 from app.schemas.resource import ResourceCreate, ResourceUpdate, ResourceRead
@@ -26,22 +28,25 @@ async def list_resources(
     return list(result.scalars().all())
 
 
-@router.get("/{resource_id}", response_model=ResourceRead)
-async def get_resource(
+@router.put("/{resource_id}", response_model=ResourceRead)
+async def update_resource(
     resource_id: int,
+    payload: ResourceUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     result = await db.execute(select(Resource).where(Resource.id == resource_id))
     resource = result.scalar_one_or_none()
     if not resource or not resource.is_active:
         raise HTTPException(status_code=404, detail="Resource not found")
-    return resource
+    return await update_resource_service(db, resource, payload)
 
 
 @router.post("/", response_model=ResourceRead)
 async def create_resource(
     payload: ResourceCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     return await create_resource_service(db, payload)
 
@@ -51,6 +56,7 @@ async def update_resource(
     resource_id: int,
     payload: ResourceUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     result = await db.execute(select(Resource).where(Resource.id == resource_id))
     resource = result.scalar_one_or_none()
@@ -63,6 +69,7 @@ async def update_resource(
 async def delete_resource(
     resource_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     result = await db.execute(select(Resource).where(Resource.id == resource_id))
     resource = result.scalar_one_or_none()

@@ -7,7 +7,10 @@ def build_client_config_for_peer(peer: Peer) -> str:
 
     # Клиентский интерфейс
     lines.append("[Interface]")
-    lines.append("# PrivateKey = <insert your client private key here>")
+    if peer.client_private_key:
+        lines.append(f"PrivateKey = {peer.client_private_key}")
+    else:
+        lines.append("# PrivateKey = <insert your client private key here>")
     lines.append(f"Address = {peer.vpn_ip}/32")
     if settings.WG_CLIENT_DNS:
         lines.append(f"DNS = {settings.WG_CLIENT_DNS}")

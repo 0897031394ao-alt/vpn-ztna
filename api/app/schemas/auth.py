@@ -1,65 +1,65 @@
+from __future__ import annotations
+
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
-class UserRegister(BaseModel):
-    username: constr(min_length=3, max_length=64)
-    email: EmailStr
-    password: constr(min_length=8, max_length=128)
-
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 
 class TokenRead(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str
+
+
+class TokenPayload(BaseModel):
+    sub: str | None = None
+    type: str | None = None
+    ver: int | None = None
+    sid: str | None = None
+    jti: str | None = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-class UserMeRead(BaseModel):
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    uuid: str
     username: str
     email: EmailStr
     is_active: bool
     is_admin: bool
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    token_version: int
+    created_at: datetime | None = None
 
 
-class AuthSessionRead(BaseModel):
+class SessionRead(BaseModel):
     session_uuid: str
-    ip_address: str | None
-    user_agent: str | None
-    is_revoked: bool
-    expires_at: datetime
-    last_seen_at: datetime
-    created_at: datetime
-    revoked_at: datetime | None
-    is_current: bool
-    display_name: str
-    device_type: str
-    device_family: str | None
-    os_family: str | None
-    browser_family: str | None
-    is_bot: bool
+    created_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    is_current: bool = False
+    is_revoked: bool = False
+    ip_address: str | None = None
+    user_agent: str | None = None
 
 
-class AuthSessionListResponse(BaseModel):
-    items: list[AuthSessionRead]
+class CurrentSessionRead(SessionRead):
+    is_current: bool = True
 
 
-class CurrentSessionResponse(BaseModel):
-    user: UserMeRead
-    session: AuthSessionRead
+class SessionListRead(BaseModel):
+    items: list[SessionRead]

@@ -1,88 +1,342 @@
-{% if peers %}
-<table>
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>User ID</th>
-      <th>VPN IP</th>
-      <th>Allowed IPs</th>
-      <th>Status</th>
-      <th>Public Key</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for peer in peers %}
-    {% set status_raw = (peer.provisioning_status|string) %}
-    {% if '.' in status_raw %}
-      {% set status = status_raw.split('.')[-1] %}
+<div id="peers-table-wrapper">
+  <style>
+    #peers-table-wrapper .htmx-indicator {
+      display: none;
+    }
+
+    #peers-table-wrapper.htmx-request .htmx-indicator,
+    #peers-table-wrapper .htmx-request .htmx-indicator {
+      display: inline-flex;
+    }
+
+    #peers-table-wrapper.htmx-request button,
+    #peers-table-wrapper .htmx-request button,
+    #peers-table-wrapper.htmx-request select,
+    #peers-table-wrapper .htmx-request select,
+    #peers-table-wrapper.htmx-request input,
+    #peers-table-wrapper .htmx-request input {
+      opacity: 0.65;
+      pointer-events: none;
+    }
+  </style>
+
+  <!-- Toolbar -->
+  <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-base font-semibold text-slate-100">WireGuard Peers</h2>
+    </div>
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <form
+        id="peers-filters"
+        hx-get="/ui/peers/table"
+        hx-target="#peers-table-wrapper"
+        hx-swap="outerHTML"
+        hx-indicator="#peers-spinner"
+        class="flex flex-col gap-2 sm:flex-row sm:items-center"
+      >
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <span>Status</span>
+          <select
+            name="status"
+            class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            hx-get="/ui/peers/table"
+            hx-trigger="change"
+            hx-target="#peers-table-wrapper"
+            hx-swap="outerHTML"
+            hx-include="#peers-filters"
+            hx-indicator="#peers-spinner"
+          >
+            <option value="all" {% if filters and filters.status == "all" %}selected{% endif %}>All</option>
+            <option value="pending" {% if filters and filters.status == "pending" %}selected{% endif %}>Pending</option>
+            <option value="provisioned" {% if filters and filters.status == "provisioned" %}selected{% endif %}>Provisioned</option>
+            <option value="error" {% if filters and filters.status == "error" %}selected{% endif %}>Error</option>
+            <option value="removed" {% if filters and filters.status == "removed" %}selected{% endif %}>Removed</option>
+            <option value="pending_revoke" {% if filters and filters.status == "pending_revoke" %}selected{% endif %}>Pending revoke</option>
+          </select>
+        </label>
+
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            name="hide_removed"
+            value="1"
+            class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+            {% if not filters or filters.hide_removed %}checked{% endif %}
+            hx-get="/ui/peers/table"
+            hx-trigger="change"
+            hx-target="#peers-table-wrapper"
+            hx-swap="outerHTML"
+            hx-include="#peers-filters"
+            hx-indicator="#peers-spinner"
+          >
+          <span>Hide removed</span>
+        </label>
+      </form>
+
+      <div class="flex items-center gap-2">
+        <button
+          hx-get="/ui/peers/table"
+          hx-include="#peers-filters"
+          hx-target="#peers-table-wrapper"
+          hx-swap="outerHTML"
+          hx-indicator="#peers-spinner"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
+
+        <button
+          hx-post="/ui/peers/sync-all"
+          hx-include="#peers-filters"
+          hx-target="#peers-table-wrapper"
+          hx-swap="outerHTML"
+          hx-indicator="#peers-spinner"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-600 bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-cyan-600"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
+          </svg>
+          Sync All Pending
+        </button>
+
+        <button
+          hx-post="/ui/peers/retry-errors"
+          hx-include="#peers-filters"
+          hx-target="#peers-table-wrapper"
+          hx-swap="outerHTML"
+          hx-indicator="#peers-spinner"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-red-600 bg-red-900/70 px-3 py-1.5 text-sm font-medium text-red-200 transition-colors duration-150 hover:bg-red-800"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v4m0 8v4m4-8h4M4 12h4"
+            />
+          </svg>
+          Retry all error
+        </button>
+
+        <span id="peers-spinner" class="htmx-indicator items-center gap-2 text-sm text-slate-400">
+          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2z"></path>
+          </svg>
+          Working…
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3 text-xs text-slate-400">
+    Showing status:
+    <span class="font-medium text-slate-300">
+      {% if not filters or filters.status == "all" %}
+        All
+      {% elif filters.status == "pending" %}
+        Pending
+      {% elif filters.status == "provisioned" %}
+        Provisioned
+      {% elif filters.status == "pending_revoke" %}
+        Pending revoke
+      {% elif filters.status == "error" %}
+        Error
+      {% elif filters.status == "removed" %}
+        Removed
+      {% else %}
+        {{ filters.status }}
+      {% endif %}
+    </span>
+    {% if not filters or filters.hide_removed %}
+      · removed hidden
     {% else %}
-      {% set status = status_raw %}
+      · removed visible
     {% endif %}
+  </div>
 
-    <tr>
-      <td>{{ peer.id }}</td>
-      <td>{{ peer.user_id }}</td>
-      <td>{{ peer.vpn_ip or "-" }}</td>
-
-      <td style="max-width: 420px;">
-        {% if peer.allowed_ips %}
-          {% set cidrs = peer.allowed_ips.split(',') %}
-          <div title="{{ peer.allowed_ips }}">
-            <strong>{{ cidrs|length }}</strong> route(s)
-          </div>
-          <div class="muted" style="margin-top:4px; word-break:break-all;">
-            {{ cidrs[:3] | join(', ') }}{% if cidrs|length > 3 %}, ...{% endif %}
-          </div>
-        {% else %}
-          <span class="muted">-</span>
-        {% endif %}
-      </td>
-
-      <td>
-        {% if status == "provisioned" %}
-          <span class="badge badge-ok">{{ status }}</span>
-        {% elif status == "pending" %}
-          <span class="badge badge-warn">{{ status }}</span>
-        {% elif status == "removed" %}
-          <span class="badge badge-err">{{ status }}</span>
-        {% else %}
-          <span class="badge badge-err">{{ status or "unknown" }}</span>
-        {% endif %}
-      </td>
-
-      <td style="max-width: 260px;">
-        <code style="word-break: break-all;">{{ peer.public_key }}</code>
-      </td>
-
-      <td>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <form
-            hx-post="/ui/peers/{{ peer.id }}/recalculate"
-            hx-target="#peers-table-container"
-            hx-swap="innerHTML"
-            style="margin:0;"
-          >
-            <button type="submit" class="btn btn-secondary">Recalculate</button>
-          </form>
-
-          <form
-            hx-post="/ui/peers/{{ peer.id }}/provision"
-            hx-target="#peers-table-container"
-            hx-swap="innerHTML"
-            style="margin:0;"
-          >
-            <button type="submit" class="btn">Provision</button>
-          </form>
-        </div>
-      </td>
-    </tr>
+  {% if sync_result %}
+  <div class="mb-3 rounded-lg px-3 py-2 text-sm
+    {% if sync_result.errors %}border border-red-700 bg-red-900/40 text-red-300
+    {% else %}border border-emerald-700 bg-emerald-900/40 text-emerald-300{% endif %}">
+    {% if sync_result.processed == 0 %}
+      No pending peers found.
+    {% else %}
+      Provisioned {{ sync_result.processed }} peer(s).
+    {% endif %}
+    {% for err in sync_result.errors %}
+      <div class="mt-1 text-red-400">⚠ {{ err }}</div>
     {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="card">
-  <h3>Peers not found</h3>
-  <div class="muted">API ответил пустым списком.</div>
+  </div>
+  {% endif %}
+
+  <div class="overflow-x-auto rounded-xl border border-slate-700">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">ID</th>
+          <th class="px-4 py-3 text-left">User ID</th>
+          <th class="px-4 py-3 text-left">VPN IP</th>
+          <th class="px-4 py-3 text-left">Allowed IPs</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-left">Public Key</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-slate-700">
+        {% for peer in peers %}
+        {% set allowed = peer.allowed_ips or "" %}
+        {% set cidrs = allowed.split(",") if allowed else [] %}
+        {% set routes_count = cidrs|length %}
+        {% set s = peer.provisioning_status.value if peer.provisioning_status and peer.provisioning_status.value is defined else (peer.provisioning_status|string if peer.provisioning_status else "unknown") %}
+
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="font-mono text-slate-200 px-4 py-3">{{ peer.id }}</td>
+
+          <td class="px-4 py-3 text-slate-300">{{ peer.user_id }}</td>
+
+          <td class="whitespace-nowrap px-4 py-3 font-mono text-cyan-400">
+            {{ peer.vpn_ip or "—" }}
+          </td>
+
+          <td class="min-w-[280px] max-w-[420px] px-4 py-3">
+            {% if routes_count > 0 %}
+              <div class="text-sm text-slate-200">
+                {{ routes_count }} route(s)
+              </div>
+              <div class="mt-1 break-all font-mono text-xs text-slate-400" title="{{ allowed }}">
+                {{ cidrs[:2] | join(", ") }}{% if routes_count > 2 %}, ...{% endif %}
+              </div>
+            {% else %}
+              <span class="text-slate-500">—</span>
+            {% endif %}
+          </td>
+
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium
+              {% if s == 'provisioned' %}bg-emerald-900/50 text-emerald-400
+              {% elif s == 'pending' %}bg-yellow-900/50 text-yellow-400
+              {% elif s == 'pending_revoke' %}bg-orange-900/50 text-orange-300
+              {% elif s == 'error' %}bg-red-900/50 text-red-400
+              {% elif s == 'removed' %}bg-slate-700 text-slate-300
+              {% else %}bg-slate-700 text-slate-400{% endif %}">
+              {{ s }}
+            </span>
+            {% if s == 'error' and peer.provisioning_error %}
+            <div class="mt-1 max-w-[200px] break-words text-[10px] leading-tight text-red-400"
+                 title="{{ peer.provisioning_error }}">
+              {{ peer.provisioning_error[:80] }}{% if peer.provisioning_error|length > 80 %}…{% endif %}
+            </div>
+            {% endif %}
+          </td>
+
+          <td class="w-[220px] max-w-[220px] px-4 py-3">
+            <div class="truncate font-mono text-xs leading-5 text-slate-500" title="{{ peer.public_key or '' }}">
+              {{ peer.public_key[:24] ~ "…" if peer.public_key and peer.public_key|length > 24 else peer.public_key or "—" }}
+            </div>
+          </td>
+
+          <td class="w-[220px] px-4 py-3">
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                hx-get="/ui/peers/{{ peer.id }}/details"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[11px] font-medium text-cyan-300 transition-colors duration-150 hover:bg-cyan-900"
+              >
+                Details
+              </button>
+
+              <button
+                hx-post="/ui/peers/{{ peer.id }}/recalculate"
+                hx-target="#peers-table-wrapper"
+                hx-swap="outerHTML"
+                hx-indicator="#peers-spinner"
+                hx-include="#peers-filters"
+                class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-[11px] font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+              >
+                Recalculate
+              </button>
+
+              {% if s == 'pending' %}
+              <button
+                hx-post="/ui/peers/{{ peer.id }}/provision"
+                hx-target="#peers-table-wrapper"
+                hx-swap="outerHTML"
+                hx-indicator="#peers-spinner"
+                hx-include="#peers-filters"
+                class="rounded-md border border-emerald-700 bg-emerald-900/40 px-2 py-1 text-[11px] font-medium text-emerald-300 transition-colors duration-150 hover:bg-emerald-900"
+              >
+                Provision
+              </button>
+              {% endif %}
+
+              {% if s == 'error' %}
+              <button
+                hx-post="/ui/peers/{{ peer.id }}/retry"
+                hx-target="#peers-table-wrapper"
+                hx-swap="outerHTML"
+                hx-indicator="#peers-spinner"
+                hx-include="#peers-filters"
+                class="rounded-md border border-red-600 bg-red-900/70 px-2 py-1 text-[11px] font-medium text-red-200 transition-colors duration-150 hover:bg-red-800"
+              >
+                Retry
+              </button>
+              {% endif %}
+
+              {% if s == 'provisioned' %}
+              <button
+                hx-post="/ui/peers/{{ peer.id }}/revoke"
+                hx-target="#peers-table-wrapper"
+                hx-swap="outerHTML"
+                hx-indicator="#peers-spinner"
+                hx-include="#peers-filters"
+                hx-confirm="Revoke this peer? Access will be disabled."
+                class="rounded-md border border-red-700 bg-red-900/40 px-2 py-1 text-[11px] font-medium text-red-300 transition-colors duration-150 hover:bg-red-900"
+              >
+                Revoke
+              </button>
+              {% endif %}
+
+              {% if s == 'provisioned' or s == 'error' %}
+              <button
+                hx-post="/ui/peers/{{ peer.id }}/regenerate"
+                hx-target="#peers-table-wrapper"
+                hx-swap="outerHTML"
+                hx-indicator="#peers-spinner"
+                hx-include="#peers-filters"
+                hx-confirm="Regenerate keys for this peer? The old config will stop working."
+                class="rounded-md border border-yellow-700 bg-yellow-900/40 px-2 py-1 text-[11px] font-medium text-yellow-300 transition-colors duration-150 hover:bg-yellow-900"
+              >
+                Regenerate
+              </button>
+              {% endif %}              
+             </div>
+           </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-6 text-center text-slate-500">
+            No peers found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
-{% endif %}

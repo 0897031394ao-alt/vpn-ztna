@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.api.deps import get_current_admin
+from app.models.user import User
 from app.models.group import user_group
 from app.models.policy import Policy
 from app.schemas.policy import PolicyCreate, PolicyRead
@@ -72,7 +74,26 @@ async def get_policy(
 async def create_policy(
     payload: PolicyCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
+    existing_result = await db.execute(
+        select(Policy).where(
+            Policy.is_active == True,  # noqa: E712
+            Policy.user_id == payload.user_id,
+            Policy.group_id == payload.group_id,
+            Policy.resource_id == payload.resource_id,
+            Policy.effect == payload.effect,
+            Policy.priority == payload.priority,
+            Policy.conditions == payload.conditions,
+        )
+    )
+    existing_policy = existing_result.scalar_one_or_none()
+    if existing_policy is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Policy already exists",
+        )
+
     policy = Policy(**payload.model_dump())
     db.add(policy)
     await db.commit()
@@ -87,6 +108,7 @@ async def update_policy(
     policy_id: int,
     payload: PolicyCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     policy = await get_policy_or_404(db, policy_id)
 
@@ -111,14 +133,17 @@ async def update_policy(
 async def delete_policy(
     policy_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
 ):
     policy = await get_policy_or_404(db, policy_id)
 
+    affected_user_ids = await get_affected_user_ids_for_policy(db, policy)
+
     policy.is_active = False
     await db.commit()
-    await db.refresh(policy)
 
-    await recalculate_affected_peers_for_policy(db, policy)
+    for user_id in affected_user_ids:
+        await recalculate_peers_for_user(db, user_id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

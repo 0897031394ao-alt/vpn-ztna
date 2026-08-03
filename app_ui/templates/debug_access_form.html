@@ -1,11 +1,12 @@
 <div>
-  <h2 class="text-lg font-semibold text-slate-100 mb-4">Select user</h2>
+  <h2 class="text-lg font-semibold text-slate-100 mb-4">Evaluate user access</h2>
 
   <form
     class="space-y-4"
     hx-get="/ui/debug/access/result"
     hx-target="#debug-access-result-panel"
     hx-swap="innerHTML"
+    hx-trigger="change from:select delay:150ms, submit"
   >
     <div>
       <label class="block text-sm text-slate-300 mb-1">User</label>
@@ -29,4 +30,3 @@
     </button>
   </form>
 </div>
-

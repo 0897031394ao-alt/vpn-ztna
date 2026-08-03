@@ -340,3 +340,45 @@ async def recalculate_all_peers_in_group(db: AsyncSession, group_id: int) -> Lis
 
     await db.commit()
     return peers
+
+# --- CRUD функции для политик (добавлены для UI) ---
+from fastapi import HTTPException
+from app.schemas.policy import PolicyCreate
+
+async def create_policy(db: AsyncSession, policy_data: dict) -> Policy:
+    """Создаёт новую политику."""
+    payload = PolicyCreate(**policy_data)
+    policy = Policy(
+        name=payload.name,
+        description=payload.description,
+        user_id=payload.user_id,
+        group_id=payload.group_id,
+        resource_id=payload.resource_id,
+        effect=payload.effect,
+        priority=payload.priority,
+        conditions=payload.conditions,
+    )
+    db.add(policy)
+    await db.commit()
+    await db.refresh(policy)
+    return policy
+
+async def update_policy(db: AsyncSession, policy_id: int, policy_data: dict) -> Policy:
+    """Обновляет существующую политику."""
+    policy = await db.get(Policy, policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    for key, value in policy_data.items():
+        if hasattr(policy, key) and value is not None:
+            setattr(policy, key, value)
+    await db.commit()
+    await db.refresh(policy)
+    return policy
+
+async def delete_policy(db: AsyncSession, policy_id: int) -> None:
+    """Мягкое удаление политики (установка is_active=False)."""
+    policy = await db.get(Policy, policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    policy.is_active = False
+    await db.commit()

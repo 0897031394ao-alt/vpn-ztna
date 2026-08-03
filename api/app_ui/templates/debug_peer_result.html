@@ -1,135 +1,85 @@
-<div id="debug-peer-result-wrapper" style="margin-top: 16px;">
-  <h3>Debug result</h3>
+{% if not peer %}
+<div class="rounded-lg border border-rose-900/60 bg-rose-950/30 p-4 text-sm text-rose-300">
+  Peer not found.
+</div>
+{% else %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+    <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Peer</div>
+    <div class="text-slate-100 font-medium">#{{ peer.id }} · {{ peer.vpn_ip }}</div>
+    <div class="text-sm text-slate-400 break-all">{{ peer.public_key }}</div>
+    <div class="text-xs text-slate-500 mt-2">
+      allowed_ips: {{ peer.allowed_ips }}
+    </div>
+    <div class="text-xs text-slate-500 mt-1">
+      provisioning_status: {{ peer.provisioning_status }}
+    </div>
+  </div>
 
-  {% if peer %}
-  <h4>Peer</h4>
-  <table>
-    <tbody>
-      <tr>
-        <th>ID</th>
-        <td>{{ peer['id'] if 'id' in peer else '' }}</td>
-      </tr>
-      <tr>
-        <th>User ID</th>
-        <td>{{ peer['user_id'] if 'user_id' in peer else '' }}</td>
-      </tr>
-      <tr>
-        <th>VPN IP</th>
-        <td>{{ peer['vpn_ip'] if 'vpn_ip' in peer else '' }}</td>
-      </tr>
-      <tr>
-        <th>Public Key</th>
-        <td><code>{{ peer['public_key'] if 'public_key' in peer else '' }}</code></td>
-      </tr>
-      <tr>
-        <th>Status</th>
-        <td>{{ peer['provisioning_status'] if 'provisioning_status' in peer else '' }}</td>
-      </tr>
-      <tr>
-        <th>Allowed IPs</th>
-        <td><code>{{ peer['allowed_ips'] if 'allowed_ips' in peer else '' }}</code></td>
-      </tr>
-    </tbody>
-  </table>
-  {% endif %}
-
-  {% if user %}
-  <h4 style="margin-top:16px;">User</h4>
-  <table>
-    <tbody>
-      {% for key, value in user.items() %}
-      <tr>
-        <th>{{ key }}</th>
-        <td>{{ value }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-
-  <h4 style="margin-top:16px;">Effective access</h4>
-
-  {% if rows %}
-  <table>
-    <thead>
-      <tr>
-        <th>Resource ID</th>
-        <th>Resource</th>
-        <th>Type</th>
-        <th>Address</th>
-        <th>Protocol</th>
-        <th>Decision</th>
-        <th>Winning Policy</th>
-        <th>Details</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-      <tr>
-        <td>{{ row.get('resource_id', '') }}</td>
-        <td>{{ row.get('resource_name', '') }}</td>
-        <td>{{ row.get('resource_type', '') }}</td>
-        <td><code>{{ row.get('address', '') }}</code></td>
-        <td>{{ row.get('protocol', '') }}</td>
-        <td>
-          {% if row.get('decision') == 'allow' %}
-            <span class="badge badge-ok">allow</span>
-          {% elif row.get('decision') == 'deny' %}
-            <span class="badge badge-err">deny</span>
-          {% else %}
-            <span class="badge badge-warn">{{ row.get('decision', 'unknown') }}</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if row.get('winning_policy') %}
-            #{{ row['winning_policy'].get('id', '') }}
-            — {{ row['winning_policy'].get('name', '') }}
-            ({{ row['winning_policy'].get('effect', '') }},
-             prio={{ row['winning_policy'].get('priority', '') }},
-             {{ row['winning_policy'].get('subject', '') }})
-          {% else %}
-            <span class="muted">none</span>
-          {% endif %}
-        </td>
-        <td>
-          <details>
-            <summary>View</summary>
-            <div style="margin-top:8px;">
-              <div><strong>Reason:</strong> {{ row.get('reason', '') }}</div>
-
-              <div style="margin-top:8px;"><strong>Matched policies:</strong></div>
-              {% if row.get('matched_policies') %}
-                <ul style="margin-top:6px;">
-                  {% for p in row.get('matched_policies', []) %}
-                  <li>
-                    #{{ p.get('id', '') }} — {{ p.get('name', '') }}
-                    ({{ p.get('effect', '') }},
-                    prio={{ p.get('priority', '') }},
-                    {{ p.get('subject', '') }})
-                  </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                <div class="muted" style="margin-top:6px;">No matched policies.</div>
-              {% endif %}
-            </div>
-          </details>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="muted">No effective access rows returned.</div>
-  {% endif %}
-
-  <details style="margin-top: 16px;">
-    <summary>Raw context</summary>
-    <pre>
-peer={{ peer | default(None) }}
-user={{ user | default(None) }}
-rows={{ rows | default([]) }}
-    </pre>
-  </details>
+  <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+    <div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Bound user</div>
+    {% if user %}
+      <div class="text-slate-100 font-medium">{{ user.username }}</div>
+      <div class="text-sm text-slate-400">{{ user.email }}</div>
+      <div class="text-xs text-slate-500 mt-2">user_id: {{ user.id }}</div>
+    {% else %}
+      <div class="text-sm text-slate-400">
+        Bound user not found.
+      </div>
+    {% endif %}
+  </div>
 </div>
 
+{% if user and rows %}
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">Resource</th>
+        <th class="px-3 py-2 text-left">Address</th>
+        <th class="px-3 py-2 text-left">Decision</th>
+        <th class="px-3 py-2 text-left">Reason</th>
+        <th class="px-3 py-2 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for row in rows %}
+      <tr class="align-top hover:bg-slate-900/60">
+        <td class="px-3 py-2">
+          <div class="text-slate-100 font-medium">{{ row.resource_name }}</div>
+          <div class="text-xs text-slate-400">{{ row.resource_type }} / #{{ row.resource_id }}</div>
+        </td>
+        <td class="px-3 py-2 text-xs text-sky-300 font-mono">
+          {{ row.address }} / {{ row.protocol }}
+        </td>
+        <td class="px-3 py-2">
+          {% if row.decision == "allow" %}
+          <span class="inline-flex rounded-full bg-emerald-900/50 px-2 py-1 text-xs text-emerald-300">allow</span>
+          {% else %}
+          <span class="inline-flex rounded-full bg-rose-900/50 px-2 py-1 text-xs text-rose-300">deny</span>
+          {% endif %}
+        </td>
+        <td class="px-3 py-2 text-xs text-slate-300">
+          {{ row.reason }}
+        </td>
+        <td class="px-3 py-2">
+          {% if user %}
+          <a
+            href="/debug/check?user_id={{ user.id }}&resource_id={{ row.resource_id }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-100 hover:bg-slate-700"
+          >
+            Drill-down
+          </a>
+          {% else %}
+          <span class="text-xs text-slate-500">No user</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}

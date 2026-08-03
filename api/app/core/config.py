@@ -1,10 +1,12 @@
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     APP_NAME: str = "vpnztna-api"
 
-    DATABASE_URL: str = "postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna"
+    DATABASE_URL: str = "postgresql+asyncpg://vpnztna:changeme@postgres:5432/vpnztna"
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
 
@@ -19,6 +21,8 @@ class Settings(BaseSettings):
     WG_SERVER_ENDPOINT: str = "vpn.example.com:51820"
     WG_CLIENT_DNS: str = "1.1.1.1"
 
+    DISABLE_RATELIMIT: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -26,5 +30,9 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
 
+
+settings = get_settings()

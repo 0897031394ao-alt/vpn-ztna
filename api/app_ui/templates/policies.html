@@ -1,18 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}Policies · VPN-ZTNA{% endblock %}
-
 {% block content %}
-<div class="toolbar">
+<div class="flex items-start justify-between mb-4 gap-4">
   <div>
-    <h1>Policies</h1>
-    <div class="muted">Страница policies пока в минимальном состоянии.</div>
+    <h1 class="text-xl font-semibold text-slate-100">Policies</h1>
+    <p class="text-sm text-slate-400 mt-1">Bind users or groups to resources with allow/deny rules.</p>
   </div>
-  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
+
+  <button
+    class="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+    hx-get="/ui/policies/new?page=1&limit=20&status=active"
+    hx-target="#modal-root"
+    hx-swap="innerHTML"
+  >
+    New policy
+  </button>
 </div>
 
-<div class="card">
-  <h2>Policies</h2>
-  <div class="muted">Здесь позже будет policy management UI.</div>
+<div
+  id="policies-table"
+  class="w-full"
+  hx-get="/ui/policies/table?page=1&limit=20&status=active"
+  hx-trigger="load"
+  hx-target="#policies-table"
+  hx-swap="innerHTML"
+>
+  <div class="text-sm text-slate-400">Loading policies...</div>
 </div>
+
+<div id="modal-root"></div>
 {% endblock %}

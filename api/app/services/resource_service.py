@@ -72,9 +72,18 @@ async def create_resource(
 
 async def update_resource(
     db: AsyncSession,
-    resource: Resource,
+    resource_id: int,
     payload: ResourceUpdate,
-) -> Resource:
+) -> Resource | None:
+    result = await db.execute(
+        select(Resource).where(
+            Resource.id == resource_id,
+            Resource.is_active == True,  # noqa: E712
+        )
+    )
+    resource = result.scalar_one_or_none()
+    if resource is None:
+        return None
     """
     Обновляет resource и пересчитывает peers всех затронутых пользователей.
     """
@@ -94,8 +103,17 @@ async def update_resource(
 
 async def soft_delete_resource(
     db: AsyncSession,
-    resource: Resource,
-) -> None:
+    resource_id: int,
+) -> Resource | None:
+    result = await db.execute(
+        select(Resource).where(
+            Resource.id == resource_id,
+            Resource.is_active == True,  # noqa: E712
+        )
+    )
+    resource = result.scalar_one_or_none()
+    if resource is None:
+        return None
     """
     Мягкое удаление: is_active = False, затем пересчёт peers.
     """
@@ -103,4 +121,5 @@ async def soft_delete_resource(
     await db.commit()
     await db.refresh(resource)
     await recalculate_peers_for_resource(db, resource)
+    return resource
 

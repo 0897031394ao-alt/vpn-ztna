@@ -1,180 +1,233 @@
-from datetime import datetime, timedelta, timezone
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select, update, desc
+from jose import JWTError
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps.auth import (
-    get_current_active_user,
-    get_current_admin,
-    get_current_user,
-)
+
+from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.security import (
-    hash_password,
-    verify_password,
     create_access_token,
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
+    verify_password,
 )
 from app.db.session import get_db
 from app.models.auth_session import AuthSession
 from app.models.user import User
 from app.schemas.auth import (
-    UserRegister,
-    TokenRead,
-    UserMeRead,
+    CurrentSessionRead,
     RefreshTokenRequest,
-    AuthSessionRead,
-    AuthSessionListResponse,
-    CurrentSessionResponse,
+    SessionListRead,
+    SessionRead,
+    TokenRead,
+    UserRead,
 )
 from app.services.audit_service import log_event
-from user_agents import parse as parse_user_agent
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    result = await db.execute(select(User).where(User.username == username))
-    return result.scalar_one_or_none()
-
-
-async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _parse_user_agent_details(user_agent: str | None) -> dict:
-    if not user_agent:
-        return {
-            "device_type": "unknown",
-            "device_family": None,
-            "os_family": None,
-            "browser_family": None,
-            "is_bot": False,
-        }
-
-    ua = parse_user_agent(user_agent)
-
-    if ua.is_bot:
-        device_type = "bot"
-    elif ua.is_mobile:
-        device_type = "mobile"
-    elif ua.is_tablet:
-        device_type = "tablet"
-    elif ua.is_pc:
-        device_type = "pc"
-    else:
-        device_type = "other"
-
-    return {
-        "device_type": device_type,
-        "device_family": ua.device.family,
-        "os_family": ua.os.family,
-        "browser_family": ua.browser.family,
-        "is_bot": ua.is_bot,
-    }
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
-def _build_session_display_name(ua_details: dict) -> str:
-    browser = ua_details.get("browser_family") or ""
-    os = ua_details.get("os_family") or ""
-    device_type = ua_details.get("device_type") or "other"
-    is_bot = ua_details.get("is_bot", False)
-
-    if is_bot:
-        return f"Bot / crawler ({browser})" if browser and browser != "Other" else "Bot / crawler"
-
-    if browser and browser != "Other" and os and os != "Other":
-        return f"{browser} on {os}"
-
-    if browser and browser != "Other":
-        return browser
-
-    if os and os != "Other":
-        return f"Unknown browser on {os}"
-
-    if device_type == "mobile":
-        return "Mobile device"
-    if device_type == "tablet":
-        return "Tablet"
-    if device_type == "pc":
-        return "Desktop"
-
-    return "Unknown device"
+def _client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
 
 
-@router.post("/register", response_model=UserMeRead, status_code=201)
-async def register_user(
-    payload: UserRegister,
-    db: AsyncSession = Depends(get_db),
-):
-    existing_username = await get_user_by_username(db, payload.username)
-    if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username already registered",
-        )
+def _user_agent(request: Request) -> str | None:
+    return request.headers.get("user-agent")
 
-    existing_email = await get_user_by_email(db, payload.email)
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
 
-    user = User(
-        username=payload.username,
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-        is_active=True,
-        is_admin=False,
+def _session_to_read(session: AuthSession) -> SessionRead:
+    return SessionRead(
+        session_uuid=session.session_uuid,
+        created_at=_as_utc(session.created_at),
+        last_seen_at=_as_utc(session.last_seen_at),
+        expires_at=_as_utc(session.expires_at),
+        revoked_at=_as_utc(session.revoked_at),
+        is_current=False,
+        is_revoked=bool(session.is_revoked),
+        ip_address=session.ip_address,
+        user_agent=session.user_agent,
     )
 
-    db.add(user)
+
+def _current_session_to_read(session: AuthSession) -> CurrentSessionRead:
+    return CurrentSessionRead(
+        session_uuid=session.session_uuid,
+        created_at=_as_utc(session.created_at),
+        last_seen_at=_as_utc(session.last_seen_at),
+        expires_at=_as_utc(session.expires_at),
+        revoked_at=_as_utc(session.revoked_at),
+        is_current=True,
+        is_revoked=bool(session.is_revoked),
+        ip_address=session.ip_address,
+        user_agent=session.user_agent,
+    )
+
+
+async def _get_session_by_uuid(
+    db: AsyncSession,
+    *,
+    session_uuid: str,
+    user_id: int | None = None,
+) -> AuthSession | None:
+    stmt = select(AuthSession).where(AuthSession.session_uuid == session_uuid)
+    if user_id is not None:
+        stmt = stmt.where(AuthSession.user_id == user_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def _issue_tokens_for_session(
+    db: AsyncSession,
+    *,
+    user: User,
+    request: Request,
+) -> tuple[AuthSession, str, str]:
+    now = _utcnow()
+    session_uuid = str(uuid4())
+    refresh_jti = str(uuid4())
+
+    expires_at = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    auth_session = AuthSession(
+        user_id=user.id,
+        session_uuid=session_uuid,
+        refresh_jti=refresh_jti,
+        ip_address=_client_ip(request),
+        user_agent=_user_agent(request),
+        created_at=now,
+        last_seen_at=now,
+        expires_at=expires_at,
+        is_revoked=False,
+        revoked_at=None,
+    )
+    db.add(auth_session)
+    await db.flush()
+
+    # FIX: Исправлены вызовы create_access_token и create_refresh_token
+    access_token = create_access_token(
+        subject=str(user.id),
+        token_version=user.token_version,
+        extra_claims={"sid": session_uuid},
+    )
+    refresh_token, _ = create_refresh_token(
+        subject=str(user.id),
+        token_version=user.token_version,
+        session_id=session_uuid,
+        refresh_jti=refresh_jti,
+    )
+
+    return auth_session, access_token, refresh_token
+
+
+async def _revoke_session(
+    db: AsyncSession,
+    *,
+    session: AuthSession,
+    now: datetime | None = None,
+) -> None:
+    ts = _as_utc(now or _utcnow())
+    session.is_revoked = True
+    session.revoked_at = ts
+    session.last_seen_at = ts
+    await db.flush()
+
+
+async def _revoke_all_other_sessions(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    current_session_uuid: str,
+    now: datetime | None = None,
+) -> int:
+    ts = _as_utc(now or _utcnow())
+    result = await db.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.user_id == user_id,
+            AuthSession.session_uuid != current_session_uuid,
+            AuthSession.is_revoked.is_(False),
+        )
+        .values(
+            is_revoked=True,
+            revoked_at=ts,
+            last_seen_at=ts,
+        )
+    )
+    return int(result.rowcount or 0)
+
+
+async def _fail_refresh(
+    db: AsyncSession,
+    *,
+    request: Request,
+    reason: str,
+    user: User | None = None,
+    session_id: str | None = None,
+    detail: str = "Invalid refresh token",
+) -> None:
+    await log_event(
+        db,
+        action="refresh_failed",
+        current_user=user,
+        peer=None,
+        resource=None,
+        details={
+            "reason": reason,
+            "session_id": session_id,
+        },
+        request=request,
+    )
     await db.commit()
-    await db.refresh(user)
-    return user
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @router.post("/login", response_model=TokenRead)
-async def login_for_access_token(
+async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await get_user_by_username(db, form_data.username)
-    if not user:
-        await log_event(
-            db,
-            action="login_failed",
-            current_user=None,
-            peer=None,
-            resource=None,
-            details={"username": form_data.username, "reason": "user_not_found"},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    result = await db.execute(
+        select(User).where(User.username == form_data.username)
+    )
+    user = result.scalar_one_or_none()
 
-    if not verify_password(form_data.password, user.hashed_password):
+    if user is None or not verify_password(form_data.password, user.hashed_password):
         await log_event(
             db,
             action="login_failed",
             current_user=user,
             peer=None,
             resource=None,
-            details={"username": form_data.username, "reason": "bad_password"},
+            details={"reason": "invalid_credentials", "username": form_data.username},
             request=request,
         )
         await db.commit()
@@ -191,7 +244,7 @@ async def login_for_access_token(
             current_user=user,
             peer=None,
             resource=None,
-            details={"username": form_data.username, "reason": "inactive_user"},
+            details={"reason": "inactive_user"},
             request=request,
         )
         await db.commit()
@@ -200,43 +253,23 @@ async def login_for_access_token(
             detail="Inactive user",
         )
 
-    session_expires_at = _utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-
-    auth_session = AuthSession(
-        user_id=user.id,
-        refresh_jti="pending",
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        is_revoked=False,
-        expires_at=session_expires_at,
-        last_seen_at=_utcnow(),
-    )
-    db.add(auth_session)
-    await db.flush()
-
-    access_token = create_access_token(
-        subject=str(user.id),
-        token_version=user.token_version,
-        expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        extra_claims={"sid": auth_session.session_uuid},
+    auth_session, access_token, refresh_token = await _issue_tokens_for_session(
+        db,
+        user=user,
+        request=request,
     )
 
-    refresh_token, refresh_jti = create_refresh_token(
-        subject=str(user.id),
-        token_version=user.token_version,
-        session_id=auth_session.session_uuid,
-        expires_days=settings.REFRESH_TOKEN_EXPIRE_DAYS,
-    )
-
-    auth_session.refresh_jti = refresh_jti
-
+    # ИСПРАВЛЕНИЕ: добавлен username в details
     await log_event(
         db,
         action="login_success",
         current_user=user,
         peer=None,
         resource=None,
-        details={"username": form_data.username, "session_id": auth_session.session_uuid},
+        details={
+            "session_id": auth_session.session_uuid,
+            "username": user.username,
+        },
         request=request,
     )
     await db.commit()
@@ -244,6 +277,7 @@ async def login_for_access_token(
     return TokenRead(
         access_token=access_token,
         refresh_token=refresh_token,
+        token_type="bearer",
     )
 
 
@@ -255,9 +289,165 @@ async def refresh_access_token(
 ):
     decoded = decode_refresh_token(payload.refresh_token)
     if not decoded:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="invalid_refresh_token",
+        )
+
+    sub = decoded.get("sub")
+    ver = decoded.get("ver")
+    sid = decoded.get("sid")
+    jti = decoded.get("jti")
+
+    if sub is None or ver is None or not sid or not jti:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="malformed_refresh_token",
+            session_id=sid,
+        )
+
+    try:
+        user_id = int(sub)
+    except (TypeError, ValueError):
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="invalid_refresh_subject",
+            session_id=sid,
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="user_not_found_or_inactive",
+            user=user,
+            session_id=sid,
+        )
+
+    if user.token_version != ver:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="token_revoked",
+            user=user,
+            session_id=sid,
+            detail="Refresh token has been revoked",
+        )
+
+    auth_session = await _get_session_by_uuid(
+        db,
+        session_uuid=sid,
+        user_id=user.id,
+    )
+    if auth_session is None:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="session_not_found",
+            user=user,
+            session_id=sid,
+        )
+
+    now = _as_utc(_utcnow())
+    expires_at = _as_utc(auth_session.expires_at)
+
+    if auth_session.is_revoked:
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="session_revoked",
+            user=user,
+            session_id=sid,
+            detail="Refresh token has been revoked",
+        )
+
+    if expires_at is not None and expires_at <= now:
+        await _revoke_session(db, session=auth_session, now=now)
+        await _fail_refresh(
+            db,
+            request=request,
+            reason="session_expired",
+            user=user,
+            session_id=sid,
+            detail="Refresh token has expired",
+        )
+
+    if auth_session.refresh_jti != jti:
+        await _revoke_session(db, session=auth_session, now=now)
+        await log_event(
+        db,
+        action="refresh_token_reuse_detected",
+        current_user=user,
+        peer=None,
+        resource=None,
+        details={
+            "session_id": sid,
+            "reason": "refresh_token_reuse",
+            "presented_jti": jti,
+            "expected_jti": auth_session.refresh_jti,
+        },
+        request=request,
+    )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_refresh_jti = str(uuid4())
+    auth_session.refresh_jti = new_refresh_jti
+    auth_session.last_seen_at = now
+    auth_session.ip_address = _client_ip(request)
+    auth_session.user_agent = _user_agent(request)
+
+    # FIX: Исправлены вызовы create_access_token и create_refresh_token
+    access_token = create_access_token(
+        subject=str(user.id),
+        token_version=user.token_version,
+        extra_claims={"sid": auth_session.session_uuid},
+    )
+    refresh_token, _ = create_refresh_token(
+        subject=str(user.id),
+        token_version=user.token_version,
+        session_id=auth_session.session_uuid,
+        refresh_jti=new_refresh_jti,
+    )
+
+    await log_event(
+        db,
+        action="refresh_success",
+        current_user=user,
+        peer=None,
+        resource=None,
+        details={"session_id": auth_session.session_uuid},
+        request=request,
+    )
+    await db.commit()
+
+    return TokenRead(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    payload: RefreshTokenRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    decoded = decode_refresh_token(payload.refresh_token)
+    if not decoded:
         await log_event(
             db,
-            action="refresh_failed",
+            action="logout_failed",
             current_user=None,
             peer=None,
             resource=None,
@@ -271,15 +461,13 @@ async def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    sub = decoded.get("sub")
-    ver = decoded.get("ver")
     sid = decoded.get("sid")
-    jti = decoded.get("jti")
+    sub = decoded.get("sub")
 
-    if sub is None or ver is None or not sid or not jti:
+    if not sid or sub is None:
         await log_event(
             db,
-            action="refresh_failed",
+            action="logout_failed",
             current_user=None,
             peer=None,
             resource=None,
@@ -295,10 +483,10 @@ async def refresh_access_token(
 
     try:
         user_id = int(sub)
-    except ValueError:
+    except (TypeError, ValueError):
         await log_event(
             db,
-            action="refresh_failed",
+            action="logout_failed",
             current_user=None,
             peer=None,
             resource=None,
@@ -314,52 +502,16 @@ async def refresh_access_token(
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
-        await log_event(
-            db,
-            action="refresh_failed",
-            current_user=user,
-            peer=None,
-            resource=None,
-            details={"reason": "user_not_found_or_inactive", "session_id": sid},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
-    if user.token_version != ver:
-        await log_event(
-            db,
-            action="refresh_failed",
-            current_user=user,
-            peer=None,
-            resource=None,
-            details={"reason": "token_revoked", "session_id": sid},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    session_result = await db.execute(
-        select(AuthSession).where(
-            AuthSession.session_uuid == sid,
-            AuthSession.user_id == user.id,
-        )
+    auth_session = await _get_session_by_uuid(
+        db,
+        session_uuid=sid,
+        user_id=user_id,
     )
-    auth_session = session_result.scalar_one_or_none()
-
     if auth_session is None:
         await log_event(
             db,
-            action="refresh_failed",
+            action="logout_failed",
             current_user=user,
             peer=None,
             resource=None,
@@ -373,204 +525,241 @@ async def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    now = _utcnow()
-
     if auth_session.is_revoked:
         await log_event(
             db,
-            action="refresh_failed",
+            action="logout_success",
             current_user=user,
             peer=None,
             resource=None,
-            details={"reason": "session_revoked", "session_id": sid},
+            details={"session_id": sid, "already_revoked": True},
             request=request,
         )
         await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        return {"detail": "Logged out"}
 
-    if auth_session.expires_at <= now:
-        auth_session.is_revoked = True
-        auth_session.revoked_at = now
-        await log_event(
-            db,
-            action="refresh_failed",
-            current_user=user,
-            peer=None,
-            resource=None,
-            details={"reason": "session_expired", "session_id": sid},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if auth_session.refresh_jti != jti:
-        auth_session.is_revoked = True
-        auth_session.revoked_at = now
-        await log_event(
-            db,
-            action="refresh_reuse_detected",
-            current_user=user,
-            peer=None,
-            resource=None,
-            details={
-                "reason": "refresh_token_reuse",
-                "session_id": sid,
-                "presented_jti": jti,
-                "expected_jti": auth_session.refresh_jti,
-            },
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    new_access_token = create_access_token(
-        subject=str(user.id),
-        token_version=user.token_version,
-        expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        extra_claims={"sid": auth_session.session_uuid},
-    )
-
-    new_refresh_token, new_refresh_jti = create_refresh_token(
-        subject=str(user.id),
-        token_version=user.token_version,
-        session_id=auth_session.session_uuid,
-        expires_days=settings.REFRESH_TOKEN_EXPIRE_DAYS,
-    )
-
-    auth_session.refresh_jti = new_refresh_jti
-    auth_session.last_seen_at = now
-    auth_session.ip_address = request.client.host if request.client else auth_session.ip_address
-    auth_session.user_agent = request.headers.get("user-agent") or auth_session.user_agent
+    await _revoke_session(db, session=auth_session)
 
     await log_event(
         db,
-        action="refresh_success",
+        action="logout_success",
         current_user=user,
         peer=None,
         resource=None,
-        details={"session_id": sid},
+        details={"session_id": sid, "reason": "refresh_token_reuse"},
         request=request,
     )
     await db.commit()
 
-    return TokenRead(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-    )
+    return {"detail": "Logged out"}
 
 
-@router.post("/logout")
-async def logout_current_session(
-    payload: RefreshTokenRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
+@router.get("/me", response_model=UserRead)
+async def read_me(
+    current_user: User = Depends(get_current_user),
 ):
-    decoded = decode_refresh_token(payload.refresh_token)
-    if not decoded:
-        await log_event(
-        db,
-        action="logout_failed",
-        current_user=None,
-        peer=None,
-        resource=None,
-        details={"reason": "invalid_refresh_token"},
-        request=request,
+    return UserRead(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        is_active=current_user.is_active,
+        is_admin=current_user.is_admin,
+        token_version=current_user.token_version,
+        created_at=_as_utc(current_user.created_at),
     )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    sub = decoded.get("sub")
-    sid = decoded.get("sid")
-
-    if sub is None or sid is None:
-        await log_event(
-            db,
-            action="logout_failed",
-            current_user=None,
-            peer=None,
-            resource=None,
-            details={"reason": "malformed_refresh_token"},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        user_id = int(sub)
-    except ValueError:
-        await log_event(
-            db,
-            action="logout_failed",
-            current_user=None,
-            peer=None,
-            resource=None,
-            details={"reason": "invalid_refresh_subject"},
-            request=request,
-        )
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    session_result = await db.execute(
-        select(AuthSession).where(
-            AuthSession.session_uuid == sid,
-            AuthSession.user_id == user_id,
-        )
-    )
-    auth_session = session_result.scalar_one_or_none()
-
-    if auth_session:
-        auth_session.is_revoked = True
-        auth_session.revoked_at = _utcnow()
-        auth_session.last_seen_at = _utcnow()
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-
-    await log_event(
-        db,
-        action="logout",
-        current_user=user,
-        peer=None,
-        resource=None,
-        details={"session_id": sid},
-        request=request,
-    )
-    await db.commit()
-
-    return {"detail": "Session revoked"}
 
 
-@router.post("/logout_all")
-async def logout_all_sessions(
+@router.get("/sessions/current", response_model=CurrentSessionRead)
+async def read_current_session(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    current_user.token_version += 1
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        decoded = decode_access_token(token)
+    except JWTError:
+        decoded = None
+
+    if not decoded:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    sid = decoded.get("sid")
+    if not sid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    auth_session = await _get_session_by_uuid(
+        db,
+        session_uuid=sid,
+        user_id=current_user.id,
+    )
+    if auth_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current session not found",
+        )
+
+    return _current_session_to_read(auth_session)
+
+
+@router.get("/sessions", response_model=SessionListRead)
+async def list_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_sid = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        try:
+            decoded = decode_access_token(token)
+        except JWTError:
+            decoded = None
+        if decoded:
+            current_sid = decoded.get("sid")
+
+    result = await db.execute(
+        select(AuthSession)
+        .where(AuthSession.user_id == current_user.id)
+        .order_by(AuthSession.created_at.desc())
+    )
+    sessions = result.scalars().all()
+
+    items: list[SessionRead] = []
+    for session in sessions:
+        item = _session_to_read(session)
+        item.is_current = session.session_uuid == current_sid
+        items.append(item)
+
+    return SessionListRead(items=items)
+
+
+@router.delete("/sessions/others", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_other_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        decoded = decode_access_token(token)
+    except JWTError:
+        decoded = None
+
+    if not decoded or not decoded.get("sid"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_sid = decoded["sid"]
+    revoked_count = await _revoke_all_other_sessions(
+        db,
+        user_id=current_user.id,
+        current_session_uuid=current_sid,
+    )
+
+    await log_event(
+        db,
+        action="sessions_revoke_others",
+        current_user=current_user,
+        peer=None,
+        resource=None,
+        details={
+            "session_id": current_sid,
+            "revoked_count": revoked_count,
+        },
+        request=request,
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/sessions/{session_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_single_session(
+    session_uuid: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    auth_header = request.headers.get("authorization", "")
+    current_sid = None
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        try:
+            decoded = decode_access_token(token)
+        except JWTError:
+            decoded = None
+        if decoded:
+            current_sid = decoded.get("sid")
+
+    if current_sid == session_uuid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot revoke current session via this endpoint",
+        )
+
+    auth_session = await _get_session_by_uuid(
+        db,
+        session_uuid=session_uuid,
+        user_id=current_user.id,
+    )
+    if auth_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    if not auth_session.is_revoked:
+        await _revoke_session(db, session=auth_session)
+
+    await log_event(
+        db,
+        action="session_revoked",
+        current_user=current_user,
+        peer=None,
+        resource=None,
+        details={"session_id": session_uuid},
+        request=request,
+    )
+    await db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/sessions", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_all_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    now = _as_utc(_utcnow())
 
     await db.execute(
         update(AuthSession)
@@ -580,217 +769,22 @@ async def logout_all_sessions(
         )
         .values(
             is_revoked=True,
-            revoked_at=_utcnow(),
-            last_seen_at=_utcnow(),
+            revoked_at=now,
+            last_seen_at=now,
         )
     )
+
+    current_user.token_version = (current_user.token_version or 0) + 1
 
     await log_event(
         db,
-        action="logout_all",
+        action="sessions_revoke_all",
         current_user=current_user,
         peer=None,
         resource=None,
-        details={"token_version": current_user.token_version},
-        request=request,
-    )
-    await db.commit()
-    await db.refresh(current_user)
-
-    return {"detail": "All sessions revoked"}
-
-
-@router.get("/sessions", response_model=AuthSessionListResponse)
-async def list_auth_sessions(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(AuthSession)
-        .where(AuthSession.user_id == current_user.id)
-        .order_by(
-            AuthSession.is_revoked.asc(),
-            desc(AuthSession.last_seen_at),
-            desc(AuthSession.created_at),
-        )
-    )
-    sessions = result.scalars().all()
-
-    current_sid = getattr(request.state, "session_uuid", None)
-    sessions = sorted(
-        sessions,
-        key=lambda s: (
-            s.session_uuid != current_sid,   # current first
-            s.is_revoked,                    # active before revoked
-            -(s.last_seen_at or s.created_at).timestamp(),  # newest first
-        ),
-    )
-
-    items = []
-    for session in sessions:
-        ua_details = _parse_user_agent_details(session.user_agent)
-        display_name = _build_session_display_name(ua_details)
-
-        items.append(
-            AuthSessionRead(
-                session_uuid=session.session_uuid,
-                ip_address=session.ip_address,
-                user_agent=session.user_agent,
-                is_revoked=session.is_revoked,
-                expires_at=session.expires_at,
-                last_seen_at=session.last_seen_at,
-                created_at=session.created_at,
-                revoked_at=session.revoked_at,
-                is_current=(session.session_uuid == current_sid),
-                display_name=display_name,
-                device_type=ua_details["device_type"],
-                device_family=ua_details["device_family"],
-                os_family=ua_details["os_family"],
-                browser_family=ua_details["browser_family"],
-                is_bot=ua_details["is_bot"],
-            )
-        )
-
-    return AuthSessionListResponse(items=items)
-
-
-@router.delete("/sessions/others")
-async def revoke_other_auth_sessions(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    current_sid = getattr(request.state, "session_uuid", None)
-    now = _utcnow()
-
-    stmt = (
-        update(AuthSession)
-        .where(
-            AuthSession.user_id == current_user.id,
-            AuthSession.is_revoked.is_(False),
-        )
-    )
-
-    if current_sid:
-        stmt = stmt.where(AuthSession.session_uuid != current_sid)
-
-    stmt = stmt.values(
-        is_revoked=True,
-        revoked_at=now,
-        last_seen_at=now,
-    )
-
-    await db.execute(stmt)
-
-    await log_event(
-        db,
-        action="other_sessions_revoked",
-        current_user=current_user,
-        peer=None,
-        resource=None,
-        details={"current_session_id": current_sid},
+        details={},
         request=request,
     )
     await db.commit()
 
-    return {"detail": "Other sessions revoked"}
-
-
-@router.delete("/sessions/{session_uuid}")
-async def revoke_auth_session(
-    session_uuid: str,
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(AuthSession).where(
-            AuthSession.session_uuid == session_uuid,
-            AuthSession.user_id == current_user.id,
-        )
-    )
-    auth_session = result.scalar_one_or_none()
-
-    if auth_session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found",
-        )
-
-    if not auth_session.is_revoked:
-        auth_session.is_revoked = True
-        auth_session.revoked_at = _utcnow()
-        auth_session.last_seen_at = _utcnow()
-
-    await log_event(
-        db,
-        action="session_revoked",
-        current_user=current_user,
-        peer=None,
-        resource=None,
-        details={"session_id": auth_session.session_uuid},
-        request=request,
-    )
-    await db.commit()
-
-    return {"detail": "Session revoked"}
-
-
-@router.get("/me", response_model=UserMeRead)
-async def read_users_me(
-    current_user: User = Depends(get_current_active_user),
-):
-    return current_user
-
-
-@router.get("/session/current", response_model=CurrentSessionResponse)
-async def get_current_session(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    current_sid = getattr(request.state, "session_uuid", None)
-    if not current_sid:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Current session not found",
-        )
-
-    result = await db.execute(
-        select(AuthSession).where(
-            AuthSession.session_uuid == current_sid,
-            AuthSession.user_id == current_user.id,
-        )
-    )
-    auth_session = result.scalar_one_or_none()
-
-    if auth_session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Current session not found",
-        )
-
-    ua_details = _parse_user_agent_details(auth_session.user_agent)
-    display_name = _build_session_display_name(ua_details)
-
-    return CurrentSessionResponse(
-        user=UserMeRead.model_validate(current_user),
-        session=AuthSessionRead(
-            session_uuid=auth_session.session_uuid,
-            ip_address=auth_session.ip_address,
-            user_agent=auth_session.user_agent,
-            is_revoked=auth_session.is_revoked,
-            expires_at=auth_session.expires_at,
-            last_seen_at=auth_session.last_seen_at,
-            created_at=auth_session.created_at,
-            revoked_at=auth_session.revoked_at,
-            is_current=True,
-            display_name=display_name,
-            device_type=ua_details["device_type"],
-            device_family=ua_details["device_family"],
-            os_family=ua_details["os_family"],
-            browser_family=ua_details["browser_family"],
-            is_bot=ua_details["is_bot"],
-        ),
-    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

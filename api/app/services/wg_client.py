@@ -4,7 +4,19 @@ from typing import Optional
 import httpx
 from fastapi import HTTPException
 
+
 WG_GATEWAY_URL = os.getenv("WG_GATEWAY_URL", "http://localhost:51821")
+WG_GATEWAY_CONNECT_TIMEOUT = float(os.getenv("WG_GATEWAY_CONNECT_TIMEOUT", "2.0"))
+WG_GATEWAY_READ_TIMEOUT = float(os.getenv("WG_GATEWAY_READ_TIMEOUT", "5.0"))
+
+
+def _gateway_timeout() -> httpx.Timeout:
+    return httpx.Timeout(
+        connect=WG_GATEWAY_CONNECT_TIMEOUT,
+        read=WG_GATEWAY_READ_TIMEOUT,
+        write=WG_GATEWAY_READ_TIMEOUT,
+        pool=WG_GATEWAY_READ_TIMEOUT,
+    )
 
 
 async def apply_peer_in_gateway(
@@ -26,7 +38,7 @@ async def apply_peer_in_gateway(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=_gateway_timeout()) as client:
             resp = await client.post(f"{WG_GATEWAY_URL}/wg/peers/apply", json=payload)
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail=f"wg-gateway request failed: {e}")
@@ -45,7 +57,7 @@ async def remove_peer_in_gateway(public_key: str) -> None:
     :raises HTTPException: если wg-gateway вернул ошибку или недоступен.
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=_gateway_timeout()) as client:
             resp = await client.delete(
                 f"{WG_GATEWAY_URL}/wg/peers",
                 params={"public_key": public_key},

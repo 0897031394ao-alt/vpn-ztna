@@ -1,8 +1,9 @@
+import os
 import subprocess
 from typing import Optional
 
 
-WG_INTERFACE = "wg0"
+WG_INTERFACE = os.getenv("WG_INTERFACE", "wg0")
 
 
 class WireGuardError(Exception):
@@ -53,6 +54,13 @@ def apply_peer(
         args += ["persistent-keepalive", str(persistent_keepalive)]
 
     _run_wg("set", *args)
+
+
+def remove_peer(public_key: str) -> None:
+    """
+    Удаляет peer из WireGuard по public_key.
+    """
+    _run_wg("set", WG_INTERFACE, "peer", public_key, "remove")
 
 
 def show_interface() -> str:

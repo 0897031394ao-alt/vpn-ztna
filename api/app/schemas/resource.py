@@ -1,7 +1,13 @@
 import ipaddress
+import re
 from datetime import datetime
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from app.models.resource import ResourceType
+
+
+FQDN_RE = re.compile(
+    r"^(?=.{1,253}$)(?!-)(?:[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$"
+)
 
 
 class ResourceCreate(BaseModel):
@@ -43,10 +49,17 @@ class ResourceCreate(BaseModel):
                 )
 
         elif rtype == ResourceType.service:
-            ip_part = addr.split(":")[0].split("/")[0]
+            host_part = addr.split(":")[0].split("/")[0]
+
+            is_ip = True
             try:
-                ipaddress.ip_address(ip_part)
+                ipaddress.ip_address(host_part)
             except ValueError:
+                is_ip = False
+
+            is_fqdn = bool(FQDN_RE.fullmatch(host_part))
+
+            if not (is_ip or is_fqdn):
                 raise ValueError(
                     f"resource_type=service requires valid IP[:port], got '{addr}'"
                 )
@@ -77,5 +90,4 @@ class ResourceRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

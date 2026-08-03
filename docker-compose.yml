@@ -12,11 +12,13 @@ services:
       - "5432:5432"
 
   api:
+    image: vpnztna-api:saved-2026-07-20
     build: ./api
     restart: unless-stopped
     network_mode: host
     volumes:
       - ./api:/app
+      - ./app_ui:/app/app_ui
     environment:
       DATABASE_URL: postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna
       SECRET_KEY: dev-secret-change
@@ -24,6 +26,7 @@ services:
       - postgres
 
   provision-worker:
+    image: vpnztna-provision-worker:saved-2026-07-20
     build: ./api
     restart: unless-stopped
     network_mode: host
@@ -38,6 +41,7 @@ services:
     command: python -m app.workers.provision_pending
 
   wg-gateway:
+    image: vpnztna-wg-gateway:saved-2026-07-20
     build: ./wg-gateway
     restart: unless-stopped
     network_mode: host

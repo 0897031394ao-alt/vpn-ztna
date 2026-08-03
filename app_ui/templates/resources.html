@@ -1,43 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-start justify-between mb-4 gap-4">
   <div>
     <h1 class="text-xl font-semibold text-slate-100">Resources</h1>
     <p class="text-sm text-slate-400 mt-1">Manage internal resources and services available for policies.</p>
   </div>
 
   <button
-    class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
-    hx-get="/ui/resources/new"
-    hx-target="#resource-form-panel"
+    class="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+    hx-get="/ui/resources/new?page=1&limit=20&status=active"
+    hx-target="#modal-root"
     hx-swap="innerHTML"
   >
     New resource
   </button>
 </div>
 
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-  <section class="xl:col-span-2">
-    <div
-      id="resources-table"
-      hx-get="/ui/resources/table"
-      hx-trigger="load"
-      hx-target="#resources-table"
-      hx-swap="innerHTML"
-    >
-      <div class="text-sm text-slate-400">Loading resources...</div>
-    </div>
-  </section>
-
-  <aside
-    id="resource-form-panel"
-    class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 min-h-[280px]"
-  >
-    <div class="text-sm text-slate-400">
-      Select “New resource” or “Edit” to open the form here.
-    </div>
-  </aside>
+<div
+  id="resources-table"
+  class="w-full"
+  hx-get="/ui/resources/table?page=1&limit=20&status=active"
+  hx-trigger="load"
+  hx-target="#resources-table"
+  hx-swap="innerHTML"
+>
+  <div class="text-sm text-slate-400">Loading resources...</div>
 </div>
-{% endblock %}
 
+<div id="modal-root"></div>
+{% endblock %}

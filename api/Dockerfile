@@ -24,7 +24,8 @@ RUN pip install --upgrade pip && pip install . \
     "python-multipart" \
     "jinja2>=3.1.0" \
     "ua-parser==1.0.2" \
-    "user-agents==2.2.0"
+    "user-agents==2.2.0" \
+    "qrcode[pil]"
 
 COPY app ./app
 COPY app_ui ./app_ui

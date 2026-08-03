@@ -1,31 +1,34 @@
 {% extends "base.html" %}
 
-{% block title %}Debug Check · VPN-ZTNA{% endblock %}
-
 {% block content %}
-<div class="toolbar">
+<div class="flex items-center justify-between mb-4">
   <div>
-    <h1>Debug Check</h1>
-    <div class="muted">Проверка user → resource access через HTMX.</div>
+    <h1 class="text-xl font-semibold text-slate-100">Access Check</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Test one user against one resource and see the final decision.
+    </p>
   </div>
-  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
 </div>
 
-<div class="card">
-  <h2>Access Check</h2>
-  <div class="muted">Сначала загружается форма выбора пользователя и ресурса, затем подгружается результат.</div>
-
-  <div
-    id="debug-check-form-container"
-    hx-get="/ui/debug/check/form"
+<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+  <aside
+    id="debug-check-form-panel"
+    class="xl:col-span-1 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+    hx-get="/ui/debug/check/form{% if prefill_user_id or prefill_resource_id %}?{% if prefill_user_id %}user_id={{ prefill_user_id }}{% endif %}{% if prefill_resource_id %}{% if prefill_user_id %}&{% endif %}resource_id={{ prefill_resource_id }}{% endif %}{% endif %}"
     hx-trigger="load"
-    hx-target="#debug-check-form-container"
+    hx-target="#debug-check-form-panel"
     hx-swap="innerHTML"
-    style="margin-top:16px;"
   >
-    Loading debug check form...
-  </div>
+    <div class="text-sm text-slate-400">Loading form...</div>
+  </aside>
 
-  <div id="debug-check-result-container" style="margin-top:16px;"></div>
+  <section
+    id="debug-check-result-panel"
+    class="xl:col-span-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[320px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select a user and a resource to evaluate access.
+    </div>
+  </section>
 </div>
 {% endblock %}

@@ -1,68 +1,95 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard · VPN-ZTNA{% endblock %}
-
 {% block content %}
-<div class="toolbar">
-  <div>
-    <h1>Admin Dashboard</h1>
-    <div class="muted">Минимальный рабочий экран админки. Сначала поднимаем peers-таблицу, затем resources CRUD через HTMX.</div>
-  </div>
-  <a class="btn btn-secondary" href="/ui/policy-explain">Open User Portal</a>
-</div>
-
-<div class="card">
-  <h2>Peers</h2>
-  <div class="muted">Таблица подгружается через HTMX из <code>/ui/peers/table</code>.</div>
-
-  <div
-    id="peers-table-container"
-    hx-get="/ui/peers/table"
-    hx-trigger="load"
-    hx-target="#peers-table-container"
-    hx-swap="innerHTML"
-    style="margin-top:16px;"
-  >
-    Loading peers table...
-  </div>
-</div>
-
-<div class="card" style="margin-top:24px;">
-  <div class="toolbar" style="margin-bottom:12px;">
+<div class="mb-6">
+  <div class="flex items-start justify-between gap-4">
     <div>
-      <h2>Resources</h2>
-      <div class="muted">Фрагменты подгружаются через HTMX из <code>/ui/resources/*</code>.</div>
+      <h1 class="text-2xl font-semibold text-slate-100">Overview</h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Platform health and operational summary for your VPN-ZTNA control plane.
+      </p>
     </div>
-
-    <button
-      type="button"
-      class="btn btn-primary"
-      hx-get="/ui/resources/new"
-      hx-target="#resource-form-container"
-      hx-swap="innerHTML"
-      hx-target-4*="#resources-error-container"
-      hx-target-5*="#resources-error-container"
-    >
-      New resource
-    </button>
   </div>
-
-  <div id="resources-error-container" style="margin-bottom:16px;"></div>
-
-  <div
-    id="resources-table-container"
-    hx-get="/ui/resources/table"
-    hx-trigger="load"
-    hx-target="#resources-table-container"
-    hx-swap="innerHTML"
-  >
-    Loading resources table...
-  </div>
-
-  <div
-    id="resource-form-container"
-    style="margin-top:16px;"
-  ></div>
 </div>
-{% endblock %}
 
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5 mb-6">
+  <a
+    href="/users"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Users</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.users.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-emerald-400">{{ summary.users.active }}</span> active,
+      <span class="text-violet-400">{{ summary.users.admins }}</span> admins
+    </div>
+  </a>
+
+  <a
+    href="#peers-section"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Peers</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.peers.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-emerald-400">{{ summary.peers.provisioned }}</span> provisioned
+    </div>
+  </a>
+
+  <a
+    href="/ui/peers/table?status=pending"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-amber-400/80 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Pending peers</div>
+    <div class="mt-2 text-2xl font-semibold text-amber-300">{{ summary.peers.pending }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      Awaiting provisioning or action
+    </div>
+  </a>
+
+  <a
+    href="/resources"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Resources</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.resources.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      Protected applications and services
+    </div>
+  </a>
+
+  <a
+    href="/policies"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Policies</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.policies.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-rose-400">{{ summary.peers.error }}</span> peers in error,
+      {{ summary.tenants.total }} tenants
+    </div>
+  </a>
+</div>
+
+<div id="peers-section" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mb-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100">Peers</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        Device provisioning, state transitions and remediation actions.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div
+  id="peers-table"
+  hx-get="/ui/peers/table?page=1&limit=20"
+  hx-trigger="load"
+  hx-target="#peers-table"
+  hx-swap="innerHTML"
+>
+  <div class="text-sm text-slate-400">Loading peers...</div>
+</div>
+<div id="modal-root"></div>
+{% endblock %}

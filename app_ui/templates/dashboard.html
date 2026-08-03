@@ -1,8 +1,85 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-4">
-  <h1 class="text-xl font-semibold text-slate-100">Peers</h1>
+<div class="mb-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold text-slate-100">Overview</h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Platform health and operational summary for your VPN-ZTNA control plane.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5 mb-6">
+  <a
+    href="/users"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Users</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.users.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-emerald-400">{{ summary.users.active }}</span> active,
+      <span class="text-violet-400">{{ summary.users.admins }}</span> admins
+    </div>
+  </a>
+
+  <a
+    href="#peers-section"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Peers</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.peers.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-emerald-400">{{ summary.peers.provisioned }}</span> provisioned
+    </div>
+  </a>
+
+  <a
+    href="/ui/peers/table?status=pending"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-amber-400/80 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Pending peers</div>
+    <div class="mt-2 text-2xl font-semibold text-amber-300">{{ summary.peers.pending }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      Awaiting provisioning or action
+    </div>
+  </a>
+
+  <a
+    href="/resources"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Resources</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.resources.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      Protected applications and services
+    </div>
+  </a>
+
+  <a
+    href="/policies"
+    class="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-colors duration-150 hover:border-cyan-500 hover:bg-slate-900/80"
+  >
+    <div class="text-xs uppercase tracking-wide text-slate-500">Policies</div>
+    <div class="mt-2 text-2xl font-semibold text-slate-100">{{ summary.policies.total }}</div>
+    <div class="mt-2 text-sm text-slate-400">
+      <span class="text-rose-400">{{ summary.peers.error }}</span> peers in error,
+      {{ summary.tenants.total }} tenants
+    </div>
+  </a>
+</div>
+
+<div id="peers-section" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mb-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100">Peers</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        Device provisioning, state transitions and remediation actions.
+      </p>
+    </div>
+  </div>
 </div>
 
 <div
@@ -14,5 +91,5 @@
 >
   <div class="text-sm text-slate-400">Loading peers...</div>
 </div>
+<div id="modal-root"></div>
 {% endblock %}
-

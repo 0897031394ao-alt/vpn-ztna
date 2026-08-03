@@ -2,40 +2,48 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.audit_event import AuditEvent
+from app.models.auditevent import AuditEvent
 
 
-async def write_audit_event(
+async def log_event(
     db: AsyncSession,
-    event_type: str,
     *,
-    user_id: int | None = None,
-    peer_id: int | None = None,
-    resource_id: int | None = None,
-    decision: str | None = None,
+    action: str,
+    current_user=None,
+    peer=None,
+    resource=None,
     details: dict[str, Any] | None = None,
-    request: Request | None = None,
+    request=None,
 ) -> AuditEvent:
-    ip = None
-    ua = None
-    if request:
-        forwarded = request.headers.get("X-Forwarded-For")
-        ip = forwarded.split(",")[0].strip() if forwarded else request.client.host if request.client else None
-        ua = request.headers.get("User-Agent")
-
     event = AuditEvent(
-        event_type=event_type,
-        user_id=user_id,
-        peer_id=peer_id,
-        resource_id=resource_id,
-        decision=decision,
-        ip_address=ip,
-        user_agent=ua,
+        action=action,
+        user_id=getattr(current_user, "id", None),
+        peer_id=getattr(peer, "id", None),
+        resource_id=getattr(resource, "id", None),
+        ip_address=_client_ip(request),
+        user_agent=_user_agent(request),
         details=details or {},
     )
     db.add(event)
-    await db.flush()   # получаем id без коммита — коммит делает вызывающий код
+    await db.flush()
     return event
+
+
+def _client_ip(request) -> str | None:
+    if request is None:
+        return None
+    forwarded = request.headers.get("x-forwarded-for") if hasattr(request, "headers") else None
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = getattr(request, "client", None)
+    if client:
+        return getattr(client, "host", None)
+    return None
+
+
+def _user_agent(request) -> str | None:
+    if request is None or not hasattr(request, "headers"):
+        return None
+    return request.headers.get("user-agent")

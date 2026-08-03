@@ -1,31 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}Debug Peer · VPN-ZTNA{% endblock %}
-
 {% block content %}
-<div class="toolbar">
+<div class="flex items-center justify-between mb-4">
   <div>
-    <h1>Debug Peer</h1>
-    <div class="muted">Проверка effective access для peer через HTMX.</div>
+    <h1 class="text-xl font-semibold text-slate-100">Peer Effective Access</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Inspect effective access for a peer via its bound user.
+    </p>
   </div>
-  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
 </div>
 
-<div class="card">
-  <h2>Peer Access Debug</h2>
-  <div class="muted">Сначала загружается форма выбора peer, затем отдельно подгружается результат.</div>
-
-  <div
-    id="debug-peer-form-container"
+<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+  <aside
+    id="debug-peer-form-panel"
+    class="xl:col-span-1 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
     hx-get="/ui/debug/peer/form"
     hx-trigger="load"
-    hx-target="#debug-peer-form-container"
+    hx-target="#debug-peer-form-panel"
     hx-swap="innerHTML"
-    style="margin-top:16px;"
   >
-    Loading debug peer form...
-  </div>
+    <div class="text-sm text-slate-400">Loading peers...</div>
+  </aside>
 
-  <div id="debug-peer-result-container" style="margin-top:16px;"></div>
+  <section
+    id="debug-peer-result-panel"
+    class="xl:col-span-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4 min-h-[320px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select a peer to inspect its effective access.
+    </div>
+  </section>
 </div>
 {% endblock %}
+

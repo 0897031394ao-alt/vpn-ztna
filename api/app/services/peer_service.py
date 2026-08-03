@@ -29,18 +29,17 @@ def build_allowed_ips(vpn_ip: str, policy_allowed_ips: list[str]) -> str:
 async def recalculate_peer_allowed_ips(db: AsyncSession, peer: Peer) -> Peer:
     """
     Пересчитывает allowed_ips для конкретного peer на основе актуальных политик пользователя.
-    Ставит peer в статус pending и очищает provisioning_error.
+    Ставит peer в статус pending и очищает provisioning_error, кроме случая полностью удалённого peer.
     """
     policy_allowed_ips = await calculate_allowed_ips_for_user(db, peer.user_id)
 
-    # Если активных политик нет — оставляем только собственный vpn_ip/32.
-    # Это безопаснее, чем кидать 403 при любом изменении политик.
     if not policy_allowed_ips:
         peer.allowed_ips = f"{peer.vpn_ip}/32"
     else:
         peer.allowed_ips = build_allowed_ips(peer.vpn_ip, policy_allowed_ips)
 
-    peer.provisioning_status = ProvisioningStatus.pending
+    if peer.provisioning_status != ProvisioningStatus.removed:
+        peer.provisioning_status = ProvisioningStatus.pending
     peer.provisioning_error = None
 
     await db.commit()
@@ -69,7 +68,9 @@ async def recalculate_peers_for_user(db: AsyncSession, user_id: int) -> List[Pee
         else:
             peer.allowed_ips = build_allowed_ips(peer.vpn_ip, policy_allowed_ips)
 
-        peer.provisioning_status = ProvisioningStatus.pending
+        # Удалённые peers не возвращаем в pending
+        if peer.provisioning_status != ProvisioningStatus.removed:
+            peer.provisioning_status = ProvisioningStatus.pending
         peer.provisioning_error = None
 
     # Один общий commit для всех peers пользователя
@@ -98,12 +99,21 @@ async def register_peer(db: AsyncSession, payload: PeerCreate) -> Peer:
     - иначе создаёт нового peer, выделяет vpn_ip и считает allowed_ips по политикам.
     """
     existing_result = await db.execute(
-        select(Peer).where(Peer.public_key == payload.public_key)
+    select(Peer).where(Peer.public_key == payload.public_key)
     )
     existing = existing_result.scalar_one_or_none()
     if existing:
-        # Для повторного вызова с тем же ключом делаем мягкий idempotent:
-        # просто актуализируем allowed_ips по текущим политикам.
+        # Не даём "реанимировать" удалённые/на удалении peers тем же ключом
+        if existing.provisioning_status in (
+            ProvisioningStatus.removed,
+            ProvisioningStatus.pending_revoke,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Peer with this public_key was revoked; create a new peer explicitly",
+            )
+
+        # Для активных состояний оставляем idempotent-поведение
         return await recalculate_peer_allowed_ips(db, existing)
 
     user_result = await db.execute(
@@ -177,9 +187,10 @@ async def register_peer_for_user(db: AsyncSession, user_id: int) -> Peer:
 
     peer = await register_peer(db, payload)
 
-    # ВАЖНО: private_key нигде не сохраняем в БД,
-    # но можем вернуть его наверх через временное поле,
-    # чтобы потом собрать конфиг.
+    peer.client_private_key = private_key
+    await db.commit()
+    await db.refresh(peer)
+
     peer._private_key = private_key  # временное поле в рантайме
 
     return peer
@@ -287,26 +298,34 @@ async def provision_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
     return peer
 
 
-async def remove_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
-    """
-    Логическое удаление peer'а:
-    - достаёт peer по id;
-    - удаляет peer из WireGuard через wg-gateway;
-    - помечает peer статусом removed и очищает provisioning_error.
-    """
+async def revoke_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
     peer = await get_peer_or_404(db, peer_id)
 
-    # Здесь считаем, что wg-gateway сам корректно обрабатывает ситуацию,
-    # когда peer уже отсутствует в конфигурации.
-    await remove_peer_in_gateway(
-        public_key=peer.public_key,
-    )
+    if peer.provisioning_status == ProvisioningStatus.removed:
+        return peer
 
-    peer.provisioning_status = ProvisioningStatus.removed
-    peer.provisioning_error = None
+    try:
+        await remove_peer_in_gateway(public_key=peer.public_key)
+    except HTTPException as e:
+        peer.mark_revoke_error(str(e.detail))
+        await db.commit()
+        await db.refresh(peer)
 
+        await log_event(
+            db,
+            action="peer_revoke_failed",
+            current_user=None,
+            peer=peer,
+            resource=None,
+            details={"error": peer.provisioning_error},
+        )
+        await db.commit()
+        raise
+
+    peer.mark_removed()
     await db.commit()
     await db.refresh(peer)
+
     await log_event(
         db,
         action="peer_removed",
@@ -314,6 +333,39 @@ async def remove_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
         peer=peer,
         resource=None,
         details={"public_key": peer.public_key},
+    )
+    await db.commit()
+
+    return peer
+
+
+async def remove_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
+    peer = await get_peer_or_404(db, peer_id)
+
+    if peer.provisioning_status in (
+        ProvisioningStatus.removed,
+        ProvisioningStatus.pending_revoke,
+    ):
+        return peer
+
+    if peer.provisioning_status == ProvisioningStatus.pending:
+        peer.mark_removed()
+    else:
+        peer.mark_pending_revoke()
+
+    await db.commit()
+    await db.refresh(peer)
+
+    await log_event(
+        db,
+        action="peer_revoke_requested",
+        current_user=None,
+        peer=peer,
+        resource=None,
+        details={
+            "public_key": peer.public_key,
+            "new_status": peer.provisioning_status.value,
+        },
     )
     await db.commit()
 
@@ -339,3 +391,52 @@ def generate_wireguard_keypair() -> tuple[str, str]:
     public_key = subprocess.check_output(["wg", "pubkey"], input=private_key).strip()
 
     return private_key.decode(), public_key.decode()
+
+
+async def regenerate_peer_keys(db: AsyncSession, peer_id: int) -> Peer:
+    """
+    Ротация ключей для существующего peer:
+    - генерирует новую пару WireGuard ключей;
+    - сохраняет новый public_key в peer;
+    - private_key привязывается как временное поле _private_key (не в БД);
+    - ставит peer в статус pending для повторного провижнинга;
+    - пишет audit-событие с указанием старого и нового public_key.
+    """
+    peer = await get_peer_or_404(db, peer_id)
+
+    if peer.provisioning_status not in (
+        ProvisioningStatus.provisioned,
+        ProvisioningStatus.error,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot regenerate keys for peer in status '{peer.provisioning_status}'",
+        )
+
+    old_public_key = peer.public_key
+    private_key, public_key = generate_wireguard_keypair()
+
+    peer.public_key = public_key
+    peer.client_private_key = private_key
+    peer.provisioning_status = ProvisioningStatus.pending
+    peer.provisioning_error = "Pending key rotation"
+
+    await db.commit()
+    await db.refresh(peer)
+
+    await log_event(
+        db,
+        action="peer_keys_regenerated",
+        current_user=None,
+        peer=peer,
+        resource=None,
+        details={
+            "old_public_key": old_public_key,
+            "new_public_key": public_key,
+        },
+    )
+    await db.commit()
+
+    # Возвращаем private_key через временное поле рантайма (не в БД)
+    peer._private_key = private_key
+    return peer

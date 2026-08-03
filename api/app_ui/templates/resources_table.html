@@ -1,54 +1,53 @@
-<div id="resources-table-wrapper">
-  <table>
-    <thead>
+<div class="rounded-xl border border-slate-800 overflow-hidden">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
       <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Address</th>
-        <th>Ports</th>
-        <th>Protocol</th>
-        <th>Active</th>
-        <th>Actions</th>
+        <th class="px-3 py-2 text-left">ID</th>
+        <th class="px-3 py-2 text-left">Name</th>
+        <th class="px-3 py-2 text-left">Type</th>
+        <th class="px-3 py-2 text-left">Address</th>
+        <th class="px-3 py-2 text-left">Ports</th>
+        <th class="px-3 py-2 text-left">Protocol</th>
+        <th class="px-3 py-2 text-left">Actions</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
       {% for resource in resources %}
-      <tr>
-        <td>{{ resource.id }}</td>
-        <td>{{ resource.name }}</td>
-        <td>{{ resource.resource_type }}</td>
-        <td>{{ resource.address }}</td>
-        <td>{{ resource.ports or '' }}</td>
-        <td>{{ resource.protocol }}</td>
-        <td>{{ 'yes' if resource.is_active else 'no' }}</td>
-        <td>
-          <button
-            type="button"
-            hx-get="/ui/resources/{{ resource.id }}/edit"
-            hx-target="#resource-form-container"
-            hx-swap="innerHTML"
-          >
-            Edit
-          </button>
+      <tr class="hover:bg-slate-900/60">
+        <td class="px-3 py-2 text-slate-400 font-mono text-xs">{{ resource.id }}</td>
+        <td class="px-3 py-2 text-slate-100 font-medium">{{ resource.name }}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">{{ resource.resource_type }}</td>
+        <td class="px-3 py-2 text-sky-300 font-mono text-xs">{{ resource.address }}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">{{ resource.ports or "—" }}</td>
+        <td class="px-3 py-2 text-slate-300 text-xs">{{ resource.protocol }}</td>
+        <td class="px-3 py-2">
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="px-2 py-1 rounded bg-slate-800 text-slate-200 text-xs hover:bg-slate-700"
+              hx-get="/ui/resources/{{ resource.id }}/edit"
+              hx-target="#resource-form-panel"
+              hx-swap="innerHTML"
+            >
+              Edit
+            </button>
 
-          <button
-            type="button"
-            hx-post="/ui/resources/{{ resource.id }}/delete"
-            hx-target="#resources-table-container"
-            hx-swap="innerHTML"
-            hx-confirm="Delete resource '{{ resource.name }}'?"
-            hx-target-4*="#resources-error-container"
-            hx-target-5*="#resources-error-container"
-            style="margin-left: 8px;"
-          >
-            Delete
-          </button>
+            <button
+              class="px-2 py-1 rounded bg-rose-900/70 text-rose-200 text-xs hover:bg-rose-800"
+              hx-post="/ui/resources/{{ resource.id }}/delete"
+              hx-target="#resources-table"
+              hx-swap="innerHTML"
+              hx-confirm="Disable resource '{{ resource.name }}'?"
+            >
+              Disable
+            </button>
+          </div>
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="8">No resources found.</td>
+        <td colspan="7" class="px-3 py-8 text-center text-slate-400">
+          No resources yet.
+        </td>
       </tr>
       {% endfor %}
     </tbody>

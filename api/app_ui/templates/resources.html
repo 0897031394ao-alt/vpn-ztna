@@ -1,49 +1,43 @@
 {% extends "base.html" %}
 
-{% block title %}Resources · VPN-ZTNA{% endblock %}
-
 {% block content %}
-<div class="toolbar">
+<div class="flex items-center justify-between mb-4">
   <div>
-    <h1>Resources</h1>
-    <div class="muted">Управление ресурсами через HTMX fragments.</div>
-  </div>
-  <a class="btn btn-secondary" href="/">Back to Dashboard</a>
-</div>
-
-<div class="card">
-  <div class="toolbar" style="margin-bottom:12px;">
-    <div>
-      <h2>Resource Catalog</h2>
-      <div class="muted">Таблица и формы подгружаются без перезагрузки страницы.</div>
-    </div>
-
-    <button
-      type="button"
-      class="btn btn-primary"
-      hx-get="/ui/resources/new"
-      hx-target="#resource-form-container"
-      hx-swap="innerHTML"
-      hx-target-4*="#resources-error-container"
-      hx-target-5*="#resources-error-container"
-    >
-      New resource
-    </button>
+    <h1 class="text-xl font-semibold text-slate-100">Resources</h1>
+    <p class="text-sm text-slate-400 mt-1">Manage internal resources and services available for policies.</p>
   </div>
 
-  <div id="resources-error-container" style="margin-bottom:16px;"></div>
-
-  <div
-    id="resources-table-container"
-    hx-get="/ui/resources/table"
-    hx-trigger="load"
-    hx-target="#resources-table-container"
+  <button
+    class="px-3 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-500"
+    hx-get="/ui/resources/new"
+    hx-target="#resource-form-panel"
     hx-swap="innerHTML"
   >
-    Loading resources table...
-  </div>
+    New resource
+  </button>
+</div>
 
-  <div id="resource-form-container" style="margin-top:16px;"></div>
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+  <section class="xl:col-span-2">
+    <div
+      id="resources-table"
+      hx-get="/ui/resources/table"
+      hx-trigger="load"
+      hx-target="#resources-table"
+      hx-swap="innerHTML"
+    >
+      <div class="text-sm text-slate-400">Loading resources...</div>
+    </div>
+  </section>
+
+  <aside
+    id="resource-form-panel"
+    class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 min-h-[280px]"
+  >
+    <div class="text-sm text-slate-400">
+      Select “New resource” or “Edit” to open the form here.
+    </div>
+  </aside>
 </div>
 {% endblock %}
 
