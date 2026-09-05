@@ -1,0 +1,214 @@
+{% macro pagination(page, total_pages, limit, status, total, resources) %}
+<div class="mb-3 flex items-center justify-between text-xs text-slate-400">
+  <button
+    {% if page <= 1 %}disabled{% endif %}
+    hx-get="/ui/resources/table?page={{ page - 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-target="#resources-table"
+    hx-swap="innerHTML"
+    class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+  >
+    Prev
+  </button>
+
+  <div class="flex items-center gap-3">
+    <span>
+      Showing {{ resources|length }} of {{ total }} resource(s)
+    </span>
+
+    <div class="inline-flex items-center gap-1">
+      {% set current_page = page %}
+      {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+      {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+      {% if start_page > 1 %}
+        <button
+          hx-get="/ui/resources/table?page=1&limit={{ limit }}&status={{ status }}"
+          hx-target="#resources-table"
+          hx-swap="innerHTML"
+          class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+        >
+          1
+        </button>
+        {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+        {% endif %}
+      {% endif %}
+
+      {% for p in range(start_page, end_page + 1) %}
+        {% if p == current_page %}
+          <span class="px-1.5 py-0.5 rounded bg-cyan-700 text-white">{{ p }}</span>
+        {% else %}
+          <button
+            hx-get="/ui/resources/table?page={{ p }}&limit={{ limit }}&status={{ status }}"
+            hx-target="#resources-table"
+            hx-swap="innerHTML"
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+          >
+            {{ p }}
+          </button>
+        {% endif %}
+      {% endfor %}
+
+      {% if end_page < total_pages %}
+        {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+        {% endif %}
+        <button
+          hx-get="/ui/resources/table?page={{ total_pages }}&limit={{ limit }}&status={{ status }}"
+          hx-target="#resources-table"
+          hx-swap="innerHTML"
+          class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+        >
+          {{ total_pages }}
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <button
+    {% if page >= total_pages %}disabled{% endif %}
+    hx-get="/ui/resources/table?page={{ page + 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-target="#resources-table"
+    hx-swap="innerHTML"
+    class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+  >
+    Next
+  </button>
+</div>
+{% endmacro %}
+
+<div class="space-y-3">
+  <div class="flex items-center justify-between gap-4">
+    <div class="text-sm text-slate-400">
+      Showing status: <span class="font-medium text-slate-200">{{ status|capitalize }}</span> · {{ total }} resource(s)
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+  <label class="flex items-center gap-2 text-sm text-slate-300">
+    <span>Rows</span>
+    <select
+      name="limit"
+      class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+      hx-get="/ui/resources/table"
+      hx-target="#resources-table"
+      hx-swap="innerHTML"
+      hx-trigger="change"
+      hx-vals='{"page": 1}'
+      hx-include="[name='status']"
+    >
+      {% for option in [5, 10, 20, 50, 100] %}
+        <option value="{{ option }}" {% if limit == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label class="flex items-center gap-2 text-sm text-slate-300">
+    <span>Status</span>
+    <select
+      name="status"
+      class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+      hx-get="/ui/resources/table"
+      hx-target="#resources-table"
+      hx-swap="innerHTML"
+      hx-trigger="change"
+      hx-vals='{"page": 1}'
+      hx-include="[name='limit']"
+    >
+      <option value="active" {% if status == "active" %}selected{% endif %}>Active</option>
+      <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Inactive</option>
+      <option value="all" {% if status == "all" %}selected{% endif %}>All</option>
+    </select>
+  </label>
+
+  <button
+    class="rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+    hx-get="/ui/resources/table?page={{ page }}&limit={{ limit }}&status={{ status }}"
+    hx-target="#resources-table"
+    hx-swap="innerHTML"
+  >
+    Refresh
+  </button>
+</div>
+
+  </div>
+
+  {{ pagination(page, total_pages, limit, status, total) }}
+
+  <div class="overflow-hidden rounded-xl border border-slate-800">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">ID</th>
+          <th class="px-4 py-3 text-left">Name</th>
+          <th class="px-4 py-3 text-left">Type</th>
+          <th class="px-4 py-3 text-left">Address</th>
+          <th class="px-4 py-3 text-left">Ports</th>
+          <th class="px-4 py-3 text-left">Protocol</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700">
+        {% for resource in resources %}
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="px-4 py-3 font-mono text-slate-400">{{ resource.id }}</td>
+          <td class="px-4 py-3 font-medium text-slate-100">{{ resource.name }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ resource.resource_type }}</td>
+          <td class="px-4 py-3 font-mono text-cyan-300">{{ resource.address }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ resource.ports or "—" }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ resource.protocol }}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-500/20"
+                hx-get="/ui/resources/{{ resource.id }}/edit?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+              >
+                Edit
+              </button>
+
+              {% if resource.is_active %}
+              <button
+                class="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                hx-post="/ui/resources/{{ resource.id }}/delete?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#resources-table"
+                hx-swap="innerHTML"
+                hx-confirm="Disable resource '{{ resource.name }}'?"
+              >
+                Disable
+              </button>
+              {% else %}
+              <button
+                class="inline-flex items-center rounded-md border border-emerald-600 bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+                hx-post="/ui/resources/{{ resource.id }}/enable?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#resources-table"
+                hx-swap="innerHTML"
+                hx-confirm="Enable resource '{{ resource.name }}'?"
+              >
+                Enable
+              </button>
+
+              <button
+                class="inline-flex items-center rounded-md border border-rose-700 bg-rose-900/40 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-900"
+                hx-post="/ui/resources/{{ resource.id }}/permanent-delete?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#resources-table"
+                hx-swap="innerHTML"
+                hx-confirm="Permanently delete resource '{{ resource.name }}'? This cannot be undone."
+              >
+                Delete permanently
+              </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-6 text-center text-slate-500">No resources found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {{ pagination(page, total_pages, limit, status, total) }}
+</div>

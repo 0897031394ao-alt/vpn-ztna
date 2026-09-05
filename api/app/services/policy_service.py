@@ -364,13 +364,21 @@ async def create_policy(db: AsyncSession, policy_data: dict) -> Policy:
     return policy
 
 async def update_policy(db: AsyncSession, policy_id: int, policy_data: dict) -> Policy:
-    """Обновляет существующую политику."""
+    """Обновляет существующую политику, включая очистку старого subject."""
     policy = await db.get(Policy, policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    for key, value in policy_data.items():
-        if hasattr(policy, key) and value is not None:
-            setattr(policy, key, value)
+
+    payload = PolicyCreate(**policy_data)
+    policy.name = payload.name
+    policy.description = payload.description
+    policy.user_id = payload.user_id
+    policy.group_id = payload.group_id
+    policy.resource_id = payload.resource_id
+    policy.effect = payload.effect
+    policy.priority = payload.priority
+    policy.conditions = payload.conditions
+
     await db.commit()
     await db.refresh(policy)
     return policy

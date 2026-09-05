@@ -1,0 +1,337 @@
+<div id="tenants-table">
+  <style>
+    #tenants-table .htmx-indicator { display: none; }
+    #tenants-table.htmx-request .htmx-indicator,
+    #tenants-table .htmx-request .htmx-indicator { display: inline-flex; }
+    #tenants-table.htmx-request button,
+    #tenants-table .htmx-request button,
+    #tenants-table.htmx-request select,
+    #tenants-table .htmx-request select {
+      opacity: 0.65;
+      pointer-events: none;
+    }
+  </style>
+
+  <div class="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div class="text-sm text-slate-400">
+      Showing status:
+      <span class="font-medium text-slate-200">
+        {% if not filters or filters.status == "all" %}All
+        {% elif filters.status == "active" %}Active
+        {% elif filters.status == "inactive" %}Inactive
+        {% else %}{{ filters.status }}{% endif %}
+      </span>
+      <span class="text-slate-600">•</span>
+      <span class="font-medium text-slate-200">{{ filters.total|default(0) }}</span> tenant(s)
+
+      <span id="tenants-spinner" class="htmx-indicator ml-3 inline-flex items-center gap-2 text-sm text-slate-400">
+        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2z"></path>
+        </svg>
+        Loading…
+      </span>
+    </div>
+
+    <form
+      id="tenants-filters"
+      hx-get="/ui/tenants/table"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-indicator="#tenants-spinner"
+      class="flex flex-wrap items-center gap-2"
+    >
+      <input type="hidden" name="page" value="{{ filters.page|default(1) }}">
+
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Rows</span>
+        <select
+          name="limit"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/tenants/table?page=1"
+          hx-trigger="change"
+          hx-target="#tenants-table"
+          hx-swap="innerHTML"
+          hx-include="#tenants-filters"
+          hx-indicator="#tenants-spinner"
+        >
+          <option value="5" {% if filters and filters.limit == 5 %}selected{% endif %}>5</option>
+          <option value="10" {% if filters and filters.limit == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if filters and filters.limit == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if filters and filters.limit == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if filters and filters.limit == 100 %}selected{% endif %}>100</option>
+        </select>
+      </label>
+
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Status</span>
+        <select
+          name="status"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/tenants/table?page=1"
+          hx-trigger="change"
+          hx-target="#tenants-table"
+          hx-swap="innerHTML"
+          hx-include="#tenants-filters"
+          hx-indicator="#tenants-spinner"
+        >
+          <option value="active" {% if filters and filters.status == "active" %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if filters and filters.status == "inactive" %}selected{% endif %}>Inactive</option>
+          <option value="all" {% if filters and filters.status == "all" %}selected{% endif %}>All</option>
+        </select>
+      </label>
+
+      <button
+        type="button"
+        hx-get="/ui/tenants/table"
+        hx-include="#tenants-filters"
+        hx-target="#tenants-table"
+        hx-swap="innerHTML"
+        hx-indicator="#tenants-spinner"
+        class="rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+      >
+        Refresh
+      </button>
+    </form>
+  </div>
+
+  <div class="mb-3 flex items-center justify-between text-xs text-slate-400">
+    <button
+      {% if filters.page|default(1) <= 1 %}disabled{% endif %}
+      hx-get="/ui/tenants/table?page={{ (filters.page|default(1)) - 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-indicator="#tenants-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Prev
+    </button>
+
+    <div class="flex items-center gap-3">
+      <span>
+        Showing {{ tenants|length }} of {{ filters.total|default(0) }} tenant(s)
+      </span>
+
+      <div class="inline-flex items-center gap-1">
+        {% set current_page = filters.page|default(1) %}
+        {% set total_pages = filters.total_pages|default(1) %}
+        {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+        {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+        {% if start_page > 1 %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/tenants/table?page=1&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            1
+          </button>
+          {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+          <button
+            class="px-1.5 py-0.5 rounded {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
+            hx-get="/ui/tenants/table?page={{ p }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            {{ p }}
+          </button>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+          {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/tenants/table?page={{ total_pages }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            {{ total_pages }}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <button
+      {% if filters.page|default(1) >= filters.total_pages|default(1) %}disabled{% endif %}
+      hx-get="/ui/tenants/table?page={{ (filters.page|default(1)) + 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-indicator="#tenants-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-700">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">Name</th>
+          <th class="px-4 py-3 text-left">Slug</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-left">Created</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700">
+        {% for tenant in tenants %}
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="px-4 py-3 font-medium text-slate-100">{{ tenant.name }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ tenant.slug or "—" }}</td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium {% if tenant.is_active %}bg-emerald-900/50 text-emerald-400{% else %}bg-slate-700 text-slate-400{% endif %}">
+              {% if tenant.is_active %}active{% else %}inactive{% endif %}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+            {{ tenant.created_at or "—" }}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                hx-get="/ui/tenants/{{ tenant.id }}/edit?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[11px] font-medium text-cyan-300 transition-colors duration-150 hover:bg-cyan-900"
+              >
+                Edit
+              </button>
+
+              {% if tenant.is_active %}
+              <button
+                hx-post="/ui/tenants/{{ tenant.id }}/toggle?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#tenants-table"
+                hx-swap="innerHTML"
+                hx-include="#tenants-filters"
+                hx-indicator="#tenants-spinner"
+                class="rounded-md border border-yellow-700 bg-yellow-900/50 px-2 py-1 text-[11px] font-medium text-yellow-300 transition-colors duration-150 hover:bg-yellow-900"
+              >
+                Disable
+              </button>
+              {% else %}
+              <button
+                hx-post="/ui/tenants/{{ tenant.id }}/toggle?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#tenants-table"
+                hx-swap="innerHTML"
+                hx-include="#tenants-filters"
+                hx-indicator="#tenants-spinner"
+                class="rounded-md border border-emerald-600 bg-emerald-700 px-2 py-1 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-emerald-600"
+              >
+                Enable
+              </button>
+              {% endif %}
+
+              <button
+                hx-post="/ui/tenants/{{ tenant.id }}/delete?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-confirm="Delete tenant {{ tenant.name }}?"
+                hx-target="#tenants-table"
+                hx-swap="innerHTML"
+                hx-include="#tenants-filters"
+                hx-indicator="#tenants-spinner"
+                class="rounded-md border border-rose-700 bg-rose-900/40 px-2 py-1 text-[11px] font-medium text-rose-300 transition-colors duration-150 hover:bg-rose-900"
+              >
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="px-4 py-6 text-center text-slate-500">No tenants found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+    <button
+      {% if filters.page|default(1) <= 1 %}disabled{% endif %}
+      hx-get="/ui/tenants/table?page={{ (filters.page|default(1)) - 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-indicator="#tenants-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Prev
+    </button>
+
+    <div class="flex items-center gap-3">
+      <span>
+        Showing {{ tenants|length }} of {{ filters.total|default(0) }} tenant(s)
+      </span>
+
+      <div class="inline-flex items-center gap-1">
+        {% set current_page = filters.page|default(1) %}
+        {% set total_pages = filters.total_pages|default(1) %}
+        {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+        {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+        {% if start_page > 1 %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/tenants/table?page=1&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            1
+          </button>
+          {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+          <button
+            class="px-1.5 py-0.5 rounded {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
+            hx-get="/ui/tenants/table?page={{ p }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            {{ p }}
+          </button>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+          {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/tenants/table?page={{ total_pages }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#tenants-table"
+            hx-swap="innerHTML"
+            hx-indicator="#tenants-spinner"
+          >
+            {{ total_pages }}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <button
+      {% if filters.page|default(1) >= filters.total_pages|default(1) %}disabled{% endif %}
+      hx-get="/ui/tenants/table?page={{ (filters.page|default(1)) + 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#tenants-table"
+      hx-swap="innerHTML"
+      hx-indicator="#tenants-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+</div>

@@ -1,9 +1,8 @@
 from datetime import datetime
-from sqlalchemy import String, DateTime, func, Table, Column, Integer, ForeignKey
+from sqlalchemy import String, DateTime, Boolean, func, Table, Column, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
-# Связующая таблица users ↔ groups
 user_group = Table(
     "user_group",
     Base.metadata,
@@ -18,6 +17,7 @@ class Group(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

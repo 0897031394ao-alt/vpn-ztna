@@ -638,3 +638,18 @@ async def ui_users_page(request: Request):
             "current_user": current_user,
         },
     )
+
+
+@app.get("/groups", response_class=HTMLResponse)
+async def ui_groups_page(request: Request):
+    current_user = await get_current_user_from_cookie(request)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="groups.html",
+        context={
+            "active_page": "/groups",
+            "current_user": current_user,
+        },
+    )

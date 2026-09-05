@@ -1,16 +1,25 @@
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
 
 
 class GroupCreate(BaseModel):
     name: str
-    description: str | None = None
+    description: Optional[str] = None
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class GroupRead(BaseModel):
     id: int
     name: str
-    description: str | None = None
+    description: Optional[str] = None
+    is_active: bool
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True

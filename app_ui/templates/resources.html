@@ -4,7 +4,9 @@
 <div class="flex items-start justify-between mb-4 gap-4">
   <div>
     <h1 class="text-xl font-semibold text-slate-100">Resources</h1>
-    <p class="text-sm text-slate-400 mt-1">Manage internal resources and services available for policies.</p>
+    <p class="mt-1 text-sm text-slate-400">
+      Manage internal resources and services available for policies.
+    </p>
   </div>
 
   <button
@@ -19,13 +21,18 @@
 
 <div
   id="resources-table"
-  class="w-full"
   hx-get="/ui/resources/table?page=1&limit=20&status=active"
   hx-trigger="load"
   hx-target="#resources-table"
   hx-swap="innerHTML"
 >
-  <div class="text-sm text-slate-400">Loading resources...</div>
+  <div class="flex items-center gap-2 text-sm text-slate-400">
+    <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+      <path class="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2z"></path>
+    </svg>
+    Loading resources…
+  </div>
 </div>
 
 <div id="modal-root"></div>

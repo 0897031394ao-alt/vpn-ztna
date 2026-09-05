@@ -1,0 +1,94 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+  <div class="w-full max-w-2xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Create User</h2>
+        <p class="mt-1 text-sm text-slate-400">
+          Add a new user account to the VPN-ZTNA platform.
+        </p>
+      </div>
+      <button
+        class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
+        hx-get="about:blank"
+        hx-target="#modal-root"
+        hx-swap="innerHTML"
+      >
+        Close
+      </button>
+    </div>
+
+    <form class="space-y-5 px-6 py-5">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Username</span>
+          <input
+            type="text"
+            name="username"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="e.g. alice"
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Email</span>
+          <input
+            type="email"
+            name="email"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="alice@example.com"
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Display name</span>
+          <input
+            type="text"
+            name="full_name"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="Alice Johnson"
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Tenant ID</span>
+          <input
+            type="number"
+            name="tenant_id"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="1"
+          />
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+          <input type="checkbox" name="is_active" checked class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500" />
+          <span class="text-sm text-slate-300">Active user</span>
+        </label>
+
+        <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+          <input type="checkbox" name="is_admin" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500" />
+          <span class="text-sm text-slate-300">Administrator</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+        <button
+          type="button"
+          class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+          hx-get="about:blank"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+        >
+          Create user
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -129,6 +129,21 @@
     </div>
   </div>
 
+  {% if group_id %}
+  <div class="flex items-center justify-between rounded-lg border border-cyan-800 bg-cyan-950/30 px-3 py-2 text-sm">
+    <div class="text-cyan-100">
+      Showing policies related to group:
+      <span class="font-medium">{{ selected_group_name }}</span>
+    </div>
+    <a
+      href="/policies"
+      class="text-cyan-300 hover:text-cyan-200 hover:underline"
+    >
+      Clear group filter
+    </a>
+  </div>
+  {% endif %}
+
   {{ pagination(page, total_pages, limit, status, total, policies) }}
 
   <div class="overflow-hidden rounded-xl border border-slate-800">
@@ -141,6 +156,7 @@
           <th class="px-4 py-3 text-left">Resource</th>
           <th class="px-4 py-3 text-left">Effect</th>
           <th class="px-4 py-3 text-left">Conditions</th>
+          <th class="px-4 py-3 text-left">Status</th>
           <th class="px-4 py-3 text-left">Actions</th>
         </tr>
       </thead>
@@ -162,12 +178,25 @@
             </span>
             {% endif %}
           </td>
-          <td class="px-4 py-3 text-slate-400">{{ policy.conditions or "—" }}</td>
+          <td class="px-4 py-3 text-slate-400">
+          {{ policy.conditions_label }} 
+          </td>
+          <td class="px-4 py-3">
+            {% if policy.is_active %}
+            <span class="inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300">
+              Active
+            </span>
+            {% else %}
+            <span class="inline-flex rounded-full bg-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300">
+              Inactive
+            </span>
+            {% endif %}
+          </td>
           <td class="px-4 py-3">
             <div class="flex flex-wrap gap-2">
               <button
                 class="inline-flex items-center rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-500/20"
-                hx-get="/ui/policies/{{ policy.id }}/edit"
+                hx-get="/ui/policies/{{ policy.id }}/edit?page={{ page }}&limit={{ limit }}&status={{ status }}"
                 hx-target="#modal-root"
                 hx-swap="innerHTML"
               >
@@ -177,7 +206,7 @@
               {% if policy.is_active %}
               <button
                 class="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
-                hx-delete="/ui/policies/{{ policy.id }}"
+                hx-post="/ui/policies/{{ policy.id }}/disable?page={{ page }}&limit={{ limit }}&status={{ status }}"
                 hx-target="#policies-table"
                 hx-swap="innerHTML"
                 hx-confirm="Disable policy '{{ policy.name }}'?"
@@ -185,16 +214,31 @@
                 Disable
               </button>
               {% else %}
-              <span class="inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400">
-                Inactive
-              </span>
+              <button
+                class="inline-flex items-center rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"
+                hx-post="/ui/policies/{{ policy.id }}/enable?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#policies-table"
+                hx-swap="innerHTML"
+                hx-confirm="Enable policy '{{ policy.name }}'?"
+              >
+                Enable
+              </button>
               {% endif %}
+
+              <button
+                class="inline-flex items-center rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/20"
+                hx-get="/ui/policies/{{ policy.id }}/delete-confirm?page={{ page }}&limit={{ limit }}&status={{ status }}"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+              >
+                Delete
+              </button>
             </div>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="px-4 py-6 text-center text-slate-500">No policies found.</td>
+          <td colspan="8" class="px-4 py-6 text-center text-slate-500">No policies found.</td>
         </tr>
         {% endfor %}
       </tbody>

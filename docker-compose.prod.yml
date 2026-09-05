@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vpnztna}
+      POSTGRES_USER: ${POSTGRES_USER:-vpnztna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    network_mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vpnztna}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vpnztna}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB:-vpnztna}
+      SECRET_KEY: ${SECRET_KEY}
+      LOG_JSON: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  provision-worker:
+    build: ./api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vpnztna}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB:-vpnztna}
+      SECRET_KEY: ${SECRET_KEY}
+      LOG_JSON: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wg-gateway:
+        condition: service_started
+    command: python -m app.workers.provision_pending
+
+  wg-gateway:
+    build: ./wg-gateway
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      WG_INTERFACE: ${WG_INTERFACE:-wg0}
+      WG_PORT: ${WG_PORT:-51820}
+      WG_ADDRESS: ${WG_ADDRESS:-100.64.0.1/32}
+      WG_PRIVATE_KEY_FILE: ${WG_PRIVATE_KEY_FILE:-/data/server.key}
+    volumes:
+      - ./wg-gateway/data:/data
+
+volumes:
+  postgres_data:

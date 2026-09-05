@@ -21,7 +21,7 @@
   <section>
     <div
       id="policies-table"
-      hx-get="/ui/policies/table"
+      hx-get="/ui/policies/table?status={% if group_id %}all{% else %}active{% endif %}{% if group_id %}&group_id={{ group_id }}{% endif %}"
       hx-trigger="load"
       hx-target="#policies-table"
       hx-swap="innerHTML"

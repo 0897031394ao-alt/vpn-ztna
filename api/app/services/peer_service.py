@@ -53,7 +53,14 @@ async def recalculate_peers_for_user(db: AsyncSession, user_id: int) -> List[Pee
     Используется при изменении политик или ресурсов.
     """
     result = await db.execute(
-        select(Peer).where(Peer.user_id == user_id)
+        select(Peer).where(
+            Peer.user_id == user_id,
+            Peer.provisioning_status.in_((
+                ProvisioningStatus.pending,
+                ProvisioningStatus.provisioned,
+                ProvisioningStatus.error,
+            )),
+        )
     )
     peers = result.scalars().all()
 
@@ -225,6 +232,18 @@ async def get_peer_with_user(db: AsyncSession, peer_id: int) -> Peer | None:
 async def recalculate_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
     peer = await get_peer_or_404(db, peer_id)
 
+    if peer.provisioning_status in (
+        ProvisioningStatus.pending_revoke,
+        ProvisioningStatus.removed,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Cannot recalculate a peer that is pending revocation "
+                "or has been removed"
+            ),
+        )
+
     old_allowed_ips = peer.allowed_ips
     peer = await recalculate_peer_allowed_ips(db, peer)
 
@@ -246,12 +265,15 @@ async def recalculate_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
 
 async def provision_peer_in_gateway(peer: Peer) -> None:
     """
-    Отправляет peer в wg-gateway через HTTP.
-    Предполагается, что peer.allowed_ips уже актуален.
+    Applies the peer to the WireGuard gateway.
+
+    Gateway-side allowed_ips is strictly the client's tunnel address.
+    Policy-derived destination CIDRs remain in peer.allowed_ips and are
+    emitted only in the client configuration.
     """
     await apply_peer_in_gateway(
         public_key=peer.public_key,
-        allowed_ips=peer.allowed_ips,
+        allowed_ips=f"{peer.vpn_ip}/32",
         endpoint=None,
         persistent_keepalive=None,
     )

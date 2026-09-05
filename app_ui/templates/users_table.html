@@ -1,0 +1,105 @@
+<div id="users-table-wrapper">
+  <div class="overflow-x-auto rounded-xl border border-slate-700">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">ID</th>
+          <th class="px-4 py-3 text-left">Username</th>
+          <th class="px-4 py-3 text-left">Email</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-left">Role</th>
+          <th class="px-4 py-3 text-left">Created</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700">
+        {% for user in users %}
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="px-4 py-3 font-mono text-slate-200">{{ user.id }}</td>
+          <td class="px-4 py-3 font-medium text-slate-100">{{ user.username }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ user.email }}</td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium
+              {% if user.is_active %}bg-emerald-900/50 text-emerald-400{% else %}bg-slate-700 text-slate-400{% endif %}">
+              {% if user.is_active %}active{% else %}inactive{% endif %}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium
+              {% if user.is_admin %}bg-violet-900/50 text-violet-400{% else %}bg-slate-800 text-slate-500{% endif %}">
+              {% if user.is_admin %}admin{% else %}user{% endif %}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+            {{ user.created_at }}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1.5">
+              <!-- Edit -->
+              <button
+                hx-get="/ui/users/{{ user.id }}/edit"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[11px] font-medium text-cyan-300 transition-colors duration-150 hover:bg-cyan-900"
+              >
+                Edit
+              </button>
+              <!-- Password -->
+              <button
+                hx-get="/ui/users/{{ user.id }}/password"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-indigo-700 bg-indigo-900/40 px-2 py-1 text-[11px] font-medium text-indigo-300 transition-colors duration-150 hover:bg-indigo-900"
+              >
+                Password
+              </button>
+              <!-- Activate / Deactivate -->
+              <button
+                hx-post="/ui/users/{{ user.id }}/toggle-active"
+                hx-target="#users-table-wrapper"
+                hx-swap="outerHTML"
+                class="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors duration-150
+                  {% if user.is_active %}
+                    border-yellow-700 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-900
+                  {% else %}
+                    border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600
+                  {% endif %}"
+              >
+                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+              <!-- Make / Remove admin -->
+              <button
+                hx-post="/ui/users/{{ user.id }}/toggle-admin"
+                hx-target="#users-table-wrapper"
+                hx-swap="outerHTML"
+                class="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors duration-150
+                  {% if user.is_admin %}
+                    border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600
+                  {% else %}
+                    border-violet-600 bg-violet-900/50 text-violet-300 hover:bg-violet-900
+                  {% endif %}"
+              >
+                {% if user.is_admin %}Remove admin{% else %}Make admin{% endif %}
+              </button>
+              <!-- Delete -->
+              <button
+                hx-post="/ui/users/{{ user.id }}/delete"
+                hx-target="#users-table-wrapper"
+                hx-swap="outerHTML"
+                hx-confirm="Delete user {{ user.username }}?"
+                class="rounded-md border border-rose-700 bg-rose-900/40 px-2 py-1 text-[11px] font-medium text-rose-300 transition-colors duration-150 hover:bg-rose-900"
+              >
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-6 text-center text-slate-500">No users found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

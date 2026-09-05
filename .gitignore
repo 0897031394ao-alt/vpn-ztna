@@ -1,22 +1,189 @@
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyd
+.Python
+env/
+venv/
 .venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.prod
+.env.local
+.env.*.local
+.env.example
+*.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Backup files
+*.bak
+*.tmp
+*~
+*.save.*
+*.orig
+*.save
+
+# Backup directories
+_bak/
+backups/
+api/backup_*/
+api/_backup_snapshots/
+
+# Temporary files
+nohup.out
+cookies.txt
+
+# Local configs
+api/wg0.conf.bak*
+wg0.conf.bak*
+docker-compose.override.yml
+
+# Legacy templates
+api/app_ui.legacy/
+
+# Backup files and directories
+*.bak
+*.bak.*
+*.save.*
+*.orig
+*.save
+api/backup_*/
+api/_backup_snapshots/
+backups/
+_bak/
+
+# Temporary
+nohup.out
+cookies.txt
+*.log
+api/wg0.conf
+wg0.conf
+*.conf.bak*
+
+# Test
+api/test.db
+*.pyc
+.pytest_cache/
+
+# WireGuard secrets
+wg-gateway/data/server.key
+wg-gateway/data/server.key.bak*
+
+# Test database
+api/test.db
+
+# Backup files with extensions
+*.bak
+*.bak.*
+*.save
+*.save.*
+*.orig
+*.tmp
+*~
+
+# Backup directories
+api/backup_*/
+api/_backup_snapshots/
+backups/
+_bak/
+
+# Local configs (безопасные примеры оставляем)
+api/.env.bak*
+*.env.bak*
+api/wg0.conf
+wg0.conf
+*.conf.bak*
+
+# Legacy templates
+api/app_ui.legacy/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+nohup.out
+cookies.txt
+
+# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-*.log
-*.bak
-*.swp
--H
--d
+.pytest_cache/
 
-api/.env
-**/__pycache__/
-*.pyc
+# All backup files (any extension)
 *.bak
+*.bak.*
 *.save
+*.save.*
+*.orig
+*.tmp
+*~
+
+# Backup directories
+api/backup_*/
+api/_backup_snapshots/
+backups/
+_bak/
+
+# Legacy
+api/app_ui.legacy/
+
+# Environment test files
+api/.env.test
+*.env.test
+
+# Docker compose backups
+docker-compose*.bak*
+
+# WireGuard secrets (уже есть, но добавим)
 wg-gateway/data/server.key
-wg-gateway/data/server.pub
+wg-gateway/data/server.key.bak*
+
+# Local configs
+*.conf.bak*
+api/wg0.conf
 wg0.conf
 
-api/app/main.py.bak.*
+# Test database
+api/test.db
+
+# IDE
+.idea/
+.vscode/
+
+# Specific backup patterns
+api/app/api/*.bak*
+api/app/services/*.bak*
+app_ui/templates/*.bak*
+api/app/api/ui_admin_fragments.py.bak*
+api/app/services/peer_service.py.bak*
+app_ui/templates/*.bak*
+docker-compose*.bak*

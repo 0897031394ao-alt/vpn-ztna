@@ -1,0 +1,365 @@
+<div id="users-table-wrapper">
+  <style>
+    #users-table-wrapper .htmx-indicator { display: none; }
+    #users-table-wrapper.htmx-request .htmx-indicator,
+    #users-table-wrapper .htmx-request .htmx-indicator { display: inline-flex; }
+    #users-table-wrapper.htmx-request button,
+    #users-table-wrapper .htmx-request button,
+    #users-table-wrapper.htmx-request select,
+    #users-table-wrapper .htmx-request select {
+      opacity: 0.65;
+      pointer-events: none;
+    }
+  </style>
+
+  <div class="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div class="text-sm text-slate-400">
+      Showing status:
+      <span class="font-medium text-slate-200">
+        {% if not filters or filters.status == "all" %}All
+        {% elif filters.status == "active" %}Active
+        {% elif filters.status == "inactive" %}Inactive
+        {% else %}{{ filters.status }}{% endif %}
+      </span>
+      <span class="text-slate-600">•</span>
+      <span class="font-medium text-slate-200">{{ filters.total|default(0) }}</span> user(s)
+
+      <span id="users-spinner" class="htmx-indicator ml-3 inline-flex items-center gap-2 text-sm text-slate-400">
+        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2z"></path>
+        </svg>
+        Loading…
+      </span>
+    </div>
+
+    <form
+      id="users-filters"
+      hx-get="/ui/users/table-paginated"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-indicator="#users-spinner"
+      class="flex flex-wrap items-center gap-2"
+    >
+
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Rows</span>
+        <select
+          name="limit"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/users/table-paginated?page=1"
+          hx-trigger="change"
+          hx-target="#users-table-wrapper"
+          hx-swap="outerHTML"
+          hx-include="#users-filters"
+          hx-indicator="#users-spinner"
+        >
+          <option value="5" {% if filters and filters.limit == 5 %}selected{% endif %}>5</option>
+          <option value="10" {% if filters and filters.limit == 10 %}selected{% endif %}>10</option>
+          <option value="20" {% if filters and filters.limit == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if filters and filters.limit == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if filters and filters.limit == 100 %}selected{% endif %}>100</option>
+        </select>
+      </label>
+
+      <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Status</span>
+        <select
+          name="status"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          hx-get="/ui/users/table-paginated?page=1"
+          hx-trigger="change"
+          hx-target="#users-table-wrapper"
+          hx-swap="outerHTML"
+          hx-include="#users-filters"
+          hx-indicator="#users-spinner"
+        >
+          <option value="active" {% if filters and filters.status == "active" %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if filters and filters.status == "inactive" %}selected{% endif %}>Inactive</option>
+          <option value="all" {% if filters and filters.status == "all" %}selected{% endif %}>All</option>
+        </select>
+      </label>
+
+      <button
+        type="button"
+        hx-get="/ui/users/table-paginated"
+        hx-include="#users-filters"
+        hx-target="#users-table-wrapper"
+        hx-swap="outerHTML"
+        hx-indicator="#users-spinner"
+        class="rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+      >
+        Refresh
+      </button>
+    </form>
+  </div>
+
+  <div class="mb-3 flex items-center justify-between text-xs text-slate-400">
+    <button
+      {% if filters.page|default(1) <= 1 %}disabled{% endif %}
+      hx-get="/ui/users/table-paginated?page={{ (filters.page|default(1)) - 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-indicator="#users-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Prev
+    </button>
+
+    <div class="flex items-center gap-3">
+      <span>
+        Showing {{ users|length }} of {{ filters.total|default(0) }} user(s)
+      </span>
+
+      <div class="inline-flex items-center gap-1">
+        {% set current_page = filters.page|default(1) %}
+        {% set total_pages = filters.total_pages|default(1) %}
+        {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+        {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+        {% if start_page > 1 %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/users/table-paginated?page=1&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            1
+          </button>
+          {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+          <button
+            class="px-1.5 py-0.5 rounded
+                   {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
+            hx-get="/ui/users/table-paginated?page={{ p }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            {{ p }}
+          </button>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+          {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/users/table-paginated?page={{ total_pages }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            {{ total_pages }}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <button
+      {% if filters.page|default(1) >= filters.total_pages|default(1) %}disabled{% endif %}
+      hx-get="/ui/users/table-paginated?page={{ (filters.page|default(1)) + 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-indicator="#users-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl border border-slate-700">
+    <table class="min-w-full text-sm text-slate-300">
+      <thead class="bg-slate-800 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-3 text-left">ID</th>
+          <th class="px-4 py-3 text-left">Username</th>
+          <th class="px-4 py-3 text-left">Email</th>
+          <th class="px-4 py-3 text-left">Status</th>
+          <th class="px-4 py-3 text-left">Role</th>
+          <th class="px-4 py-3 text-left">Created</th>
+          <th class="px-4 py-3 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-700">
+        {% for user in users %}
+        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+          <td class="px-4 py-3 font-mono text-slate-200">{{ user.id }}</td>
+          <td class="px-4 py-3 font-medium text-slate-100">{{ user.username }}</td>
+          <td class="px-4 py-3 text-slate-300">{{ user.email }}</td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium
+              {% if user.is_active %}bg-emerald-900/50 text-emerald-400{% else %}bg-slate-700 text-slate-400{% endif %}">
+              {% if user.is_active %}active{% else %}inactive{% endif %}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium
+              {% if user.is_admin %}bg-violet-900/50 text-violet-400{% else %}bg-slate-800 text-slate-500{% endif %}">
+              {% if user.is_admin %}admin{% else %}user{% endif %}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+            {{ user.created_at }}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                hx-get="/ui/users/{{ user.id }}/edit"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[11px] font-medium text-cyan-300 transition-colors duration-150 hover:bg-cyan-900"
+              >
+                Edit
+              </button>
+
+              <button
+                hx-get="/ui/users/{{ user.id }}/password"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-indigo-700 bg-indigo-900/40 px-2 py-1 text-[11px] font-medium text-indigo-300 transition-colors duration-150 hover:bg-indigo-900"
+              >
+                Password
+              </button>
+
+              <button
+                hx-post="/ui/users/{{ user.id }}/toggle-active?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#users-table-wrapper"
+                hx-swap="outerHTML"
+                hx-include="#users-filters"
+                hx-indicator="#users-spinner"
+                class="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors duration-150
+                  {% if user.is_active %}
+                    border-yellow-700 bg-yellow-900/50 text-yellow-300 hover:bg-yellow-900
+                  {% else %}
+                    border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600
+                  {% endif %}"
+              >
+                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+
+              <button
+                hx-post="/ui/users/{{ user.id }}/toggle-admin?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#users-table-wrapper"
+                hx-swap="outerHTML"
+                hx-include="#users-filters"
+                hx-indicator="#users-spinner"
+                class="rounded-md border px-2 py-1 text-[11px] font-medium transition-colors duration-150
+                  {% if user.is_admin %}
+                    border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600
+                  {% else %}
+                    border-violet-600 bg-violet-900/50 text-violet-300 hover:bg-violet-900
+                  {% endif %}"
+              >
+                {% if user.is_admin %}Remove admin{% else %}Make admin{% endif %}
+              </button>
+
+              <button
+                hx-get="/ui/users/{{ user.id }}/delete-confirm?page={{ filters.page|default(1) }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+                class="rounded-md border border-rose-700 bg-rose-900/40 px-2 py-1 text-[11px] font-medium text-rose-300 transition-colors duration-150 hover:bg-rose-900"
+              >
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-6 text-center text-slate-500">No users found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="mt-4 mb-3 flex items-center justify-between text-xs text-slate-400">
+    <!-- Левая кнопка Prev -->
+    <button
+      {% if filters.page|default(1) <= 1 %}disabled{% endif %}
+      hx-get="/ui/users/table-paginated?page={{ (filters.page|default(1)) - 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-indicator="#users-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Prev
+    </button>
+
+    <!-- Центр: текст + номера страниц -->
+    <div class="flex items-center gap-3">
+      <span>
+        Showing {{ users|length }} of {{ filters.total|default(0) }} user(s)
+      </span>
+
+      <div class="inline-flex items-center gap-1">
+        {% set current_page = filters.page|default(1) %}
+        {% set total_pages = filters.total_pages|default(1) %}
+        {% set start_page = 1 if total_pages <= 5 else [1, current_page - 2]|max %}
+        {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
+
+        {% if start_page > 1 %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/users/table-paginated?page=1&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            1
+          </button>
+          {% if start_page > 2 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+          <button
+            class="px-1.5 py-0.5 rounded
+                   {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
+            hx-get="/ui/users/table-paginated?page={{ p }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            {{ p }}
+          </button>
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+          {% if end_page < total_pages - 1 %}
+          <span class="px-1 text-slate-500">…</span>
+          {% endif %}
+          <button
+            class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
+            hx-get="/ui/users/table-paginated?page={{ total_pages }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+            hx-target="#users-table-wrapper"
+            hx-swap="outerHTML"
+            hx-indicator="#users-spinner"
+          >
+            {{ total_pages }}
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Правая кнопка Next -->
+    <button
+      {% if filters.page|default(1) >= filters.total_pages|default(1) %}disabled{% endif %}
+      hx-get="/ui/users/table-paginated?page={{ (filters.page|default(1)) + 1 }}&limit={{ filters.limit|default(20) }}&status={{ filters.status|default('active') }}"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-indicator="#users-spinner"
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+    >
+      Next
+    </button>
+  </div>
+
+</div>

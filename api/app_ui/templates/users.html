@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-start justify-between mb-4 gap-4">
+  <div>
+    <h1 class="text-xl font-semibold text-slate-100">Users</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Manage user accounts, activation status and admin roles.
+    </p>
+  </div>
+
+  <button
+    class="inline-flex items-center rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+    hx-get="/ui/users/new"
+    hx-target="#modal-root"
+    hx-swap="innerHTML"
+  >
+    Create User
+  </button>
+</div>
+
+<div
+  id="users-table-wrapper"
+  hx-get="/ui/users/table"
+  hx-trigger="load"
+  hx-target="#users-table-wrapper"
+  hx-swap="outerHTML"
+>
+  <div class="flex items-center gap-2 text-sm text-slate-400">
+    <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+      <path class="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2z"></path>
+    </svg>
+    Loading users…
+  </div>
+</div>
+
+<div id="modal-root"></div>
+{% endblock %}

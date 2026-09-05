@@ -1,0 +1,64 @@
+<div class="space-y-4">
+  <div>
+    <h2 class="text-base font-semibold text-slate-100">
+      {% if tenant %}Edit tenant{% else %}New tenant{% endif %}
+    </h2>
+    <p class="mt-1 text-sm text-slate-400">
+      {% if tenant %}Update tenant settings.{% else %}Create a new tenant record.{% endif %}
+    </p>
+  </div>
+
+  <form
+    class="space-y-4"
+    hx-post="{{ form_action }}"
+    hx-target="#tenants-table"
+    hx-swap="innerHTML"
+  >
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Name</label>
+      <input
+        type="text"
+        name="name"
+        value="{{ tenant.name if tenant else '' }}"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+        required
+      >
+    </div>
+
+    <div>
+      <label class="block text-sm text-slate-300 mb-1">Slug</label>
+      <input
+        type="text"
+        name="slug"
+        value="{{ tenant.slug if tenant and tenant.slug else '' }}"
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+      >
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-slate-300">
+      <input
+        type="checkbox"
+        name="is_active"
+        class="rounded border-slate-600 bg-slate-950 text-sky-500 focus:ring-sky-500"
+        {% if tenant is none or tenant.is_active %}checked{% endif %}
+      >
+      Active
+    </label>
+
+    <div class="flex items-center gap-2 pt-2">
+      <button
+        type="submit"
+        class="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500"
+      >
+        {{ submit_label }}
+      </button>
+      <button
+        type="button"
+        class="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
+        onclick="document.getElementById('tenant-form-panel').innerHTML='<div class=&quot;text-sm text-slate-400&quot;>Select “New tenant” or “Edit” to open the form here.</div>'"
+      >
+        Cancel
+      </button>
+    </div>
+  </form>
+</div>

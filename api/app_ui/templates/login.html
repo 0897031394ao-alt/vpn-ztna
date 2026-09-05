@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — VPN-ZTNA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex items-center justify-center px-4">
+
+  <div class="w-full max-w-sm">
+
+    <div class="mb-8 text-center">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 mb-4">
+        <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+        </svg>
+      </div>
+      <h1 class="text-xl font-semibold text-slate-100">VPN-ZTNA Control Plane</h1>
+      <p class="mt-1 text-sm text-slate-500">Admin access only</p>
+    </div>
+
+    {% if error %}
+    <div class="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/login" class="space-y-4">
+
+      <div>
+        <label for="username" class="block text-xs font-medium uppercase tracking-wide text-slate-500 mb-1.5">
+          Username
+        </label>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          required
+          autocomplete="username"
+          autofocus
+          class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600
+                 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+          placeholder="rootadmin"
+        />
+      </div>
+
+      <div>
+        <label for="password" class="block text-xs font-medium uppercase tracking-wide text-slate-500 mb-1.5">
+          Password
+        </label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          required
+          autocomplete="current-password"
+          class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600
+                 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+          placeholder="••••••••"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white transition"
+      >
+        Sign in
+      </button>
+
+    </form>
+
+  </div>
+
+</body>
+</html>

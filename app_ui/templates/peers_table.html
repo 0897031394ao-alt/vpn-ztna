@@ -79,6 +79,7 @@
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-300">
+          <input type="hidden" name="hide_removed" value="0">
           <input
             type="checkbox"
             name="hide_removed"
@@ -375,6 +376,7 @@
                 Details
               </button>
 
+              {% if s in ["pending", "provisioned", "error"] %}
               <button
                 hx-post="/ui/peers/{{ peer.id }}/recalculate"
                 hx-target="#peers-table-wrapper"
@@ -385,6 +387,7 @@
               >
                 Recalculate
               </button>
+              {% endif %}
 
               {% if s == 'pending' %}
               <button

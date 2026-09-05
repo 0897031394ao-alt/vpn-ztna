@@ -1,0 +1,157 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+  <div class="w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <div class="flex items-start justify-between border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">
+          {% if group.id is defined and group.id is not none %}Edit Group{% else %}Create Group{% endif %}
+        </h2>
+        <p class="mt-1 text-sm text-slate-400">
+          {% if group.id is defined and group.id is not none %}
+          Update group name, description and member assignments.
+          {% else %}
+          Add a new group to manage access policies and peer provisioning.
+          {% endif %}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
+        onclick="document.getElementById('modal-root').innerHTML='';"
+      >
+        Close
+      </button>
+    </div>
+
+    {% if error_message %}
+      <div id="group-form-error" class="m-4 rounded-md border border-rose-700 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+        {{ error_message }}
+      </div>
+    {% else %}
+      <div id="group-form-error"></div>
+    {% endif %}
+
+    <form
+      id="group-form"
+      class="space-y-5 px-6 py-5"
+      action="{{ form_action }}"
+      method="post"
+      novalidate
+      hx-post="{{ form_action }}"
+      hx-trigger="submit"
+      hx-target="#groups-table"
+      hx-swap="outerHTML"
+      hx-on::after-request="if(event.detail.successful){ document.getElementById('modal-root').innerHTML=''; }"
+    >
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Name</span>
+          <input
+            type="text"
+            name="name"
+            value="{{ group.name if group else '' }}"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="Engineering"
+            required
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Description</span>
+          <textarea
+            name="description"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+            rows="3"
+            placeholder="Optional description"
+          >{{ group.description if group else '' }}</textarea>
+        </label>
+      </div>
+
+      <div>
+        <div class="mb-1 flex items-center justify-between">
+          <span class="block text-sm text-slate-300">Members</span>
+          <span id="member-count" class="text-xs text-slate-500">0 selected</span>
+        </div>
+        <input
+          type="text"
+          id="member-search"
+          placeholder="Search users…"
+          class="mb-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+          oninput="filterGroupMembers(this.value)"
+        />
+        <div
+          id="member-list"
+          class="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-2"
+        >
+          {% for user in users %}
+            <label
+              class="member-row flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-900"
+              data-label="{{ user.label|lower }}"
+            >
+              <input
+                type="checkbox"
+                name="user_ids"
+                value="{{ user.id }}"
+                class="member-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+                {% if group and user.id in group.user_ids %}checked{% endif %}
+                onchange="updateGroupMemberCount()"
+              />
+              <span>{{ user.label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <script>
+        function updateGroupMemberCount() {
+          var count = document.querySelectorAll('.member-checkbox:checked').length;
+          var el = document.getElementById('member-count');
+          if (el) el.textContent = count + ' selected';
+        }
+        function filterGroupMembers(query) {
+          var q = query.trim().toLowerCase();
+          document.querySelectorAll('.member-row').forEach(function (row) {
+            var label = row.getAttribute('data-label') || '';
+            row.style.display = label.indexOf(q) !== -1 ? 'flex' : 'none';
+          });
+        }
+        document.addEventListener('DOMContentLoaded', updateGroupMemberCount);
+        updateGroupMemberCount();
+      </script>
+
+      {% if group.id is defined and group.id is not none %}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+          <input
+            type="checkbox"
+            name="is_active"
+            {% if group.is_active %}checked{% endif %}
+            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+          />
+          <span class="text-sm text-slate-300">Group is active</span>
+        </label>
+      </div>
+      {% endif %}
+
+      <input type="hidden" name="page" value="{{ page }}">
+      <input type="hidden" name="limit" value="{{ limit }}">
+      <input type="hidden" name="status" value="{{ status }}">
+
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+        <button
+          type="button"
+          class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+          onclick="document.getElementById('modal-root').innerHTML='';"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+        >
+          {{ submit_label }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,284 @@
+{% set status_raw = peer_view.provisioning_status|string %}
+{% if '.' in status_raw %}
+  {% set status = status_raw.split('.')[-1] %}
+{% else %}
+  {% set status = status_raw %}
+{% endif %}
+
+<div
+  id="peer-modal-overlay"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+  onclick="if(event.target===this)document.getElementById('modal-root').innerHTML=''"
+>
+  <div class="relative w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between border-b border-slate-800 px-6 py-4">
+      <div class="flex items-center gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-100">Peer #{{ peer_view.id }}</h2>
+          <p class="mt-0.5 text-sm text-slate-400">user_id={{ peer_view.user_id }}</p>
+        </div>
+        <span class="rounded-full px-2.5 py-1 text-xs font-semibold
+        {% if status == 'provisioned' %}bg-emerald-900/60 text-emerald-300
+        {% elif status == 'pending' %}bg-yellow-900/60 text-yellow-300
+        {% elif status == 'pending_revoke' %}bg-orange-900/60 text-orange-300
+        {% elif status == 'error' %}bg-red-900/60 text-red-300
+        {% elif status == 'removed' %}bg-slate-700 text-slate-300
+        {% else %}bg-slate-700 text-slate-400{% endif %}">
+        {{ status }}
+        </span>
+        {% if peer_view.routes_count > 0 %}
+        <span class="rounded-full bg-cyan-900/40 px-2 py-0.5 text-xs font-medium text-cyan-400">
+          {{ peer_view.routes_count }} routes
+        </span>
+        {% endif %}
+      </div>
+      <button
+        type="button"
+        class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
+        onclick="document.getElementById('modal-root').innerHTML=''"
+      >
+        ✕ Close
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="grid grid-cols-1 gap-6 px-6 py-5 lg:grid-cols-2">
+
+      <!-- Левая колонка -->
+      <div class="space-y-4">
+
+        <div>
+          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">VPN IP</div>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-sm text-cyan-400" id="peer-vpn-ip">{{ peer_view.vpn_ip or "—" }}</span>
+            {% if peer_view.vpn_ip %}
+            <button
+              data-copy="{{ peer_view.vpn_ip }}"
+              data-copy-target="copy-ip"
+              id="copy-ip"
+              class="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 hover:bg-slate-800 hover:text-white transition-colors"
+            >Copy</button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">Public key</div>
+          <div class="relative">
+            <div class="break-all rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 pr-16 font-mono text-xs text-slate-300">
+              {{ peer_view.public_key or "—" }}
+            </div>
+            {% if peer_view.public_key %}
+            <button
+              data-copy="{{ peer_view.public_key }}"
+              data-copy-target="copy-pk"
+              id="copy-pk"
+              class="absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:text-white transition-colors"
+            >Copy</button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">Timestamps</div>
+          <div class="space-y-1.5 text-sm text-slate-300">
+            <div class="flex gap-2">
+              <span class="w-20 shrink-0 text-slate-500">Created</span>
+              <span>{{ peer_view.created_at or "—" }}</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="w-20 shrink-0 text-slate-500">Updated</span>
+              <span>{{ peer_view.updated_at or "—" }}</span>
+            </div>
+          </div>
+        </div>
+
+        {% if peer_view.provisioning_error %}
+        <div>
+          <div class="mb-1.5 text-xs uppercase tracking-wide text-rose-500">Provisioning error</div>
+          <div class="rounded-lg border border-red-900 bg-red-950/50 p-3">
+            <div class="break-words text-sm text-red-300">{{ peer_view.provisioning_error }}</div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Правая колонка — routes -->
+      <div class="space-y-4">
+        <div>
+          <div class="mb-1.5 flex items-center justify-between">
+            <div class="text-xs uppercase tracking-wide text-slate-500">
+              Allowed IPs
+              <span class="ml-1 font-medium text-slate-300">{{ peer_view.routes_count }}</span>
+            </div>
+            {% if peer_view.allowed_ips %}
+            <button
+              data-copy="{{ peer_view.allowed_ips }}"
+              data-copy-target="copy-routes"
+              id="copy-routes"
+              class="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 hover:bg-slate-800 hover:text-white transition-colors"
+            >Copy all</button>
+            {% endif %}
+          </div>
+          <div class="max-h-80 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-3">
+            {% if peer_view.cidrs %}
+              <div class="space-y-1">
+                {% for cidr in peer_view.cidrs %}
+                <div class="break-all font-mono text-xs text-slate-300">{{ cidr }}</div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-sm text-slate-500">No routes assigned.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+        <!-- Footer actions -->
+    <div class="flex flex-col gap-3 border-t border-slate-800 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="text-xs text-slate-500">
+        Downloaded config contains the current peer settings.
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          class="rounded-lg border border-emerald-700 bg-emerald-900/40 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900 transition-colors"
+          onclick="document.getElementById('peer-qr-overlay').classList.remove('hidden')"
+        >
+          Show QR
+        </button>
+
+        <a
+          href="/ui/peers/{{ peer_view.id }}/config"
+          class="rounded-lg border border-cyan-700 bg-cyan-900/40 px-4 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-900 transition-colors"
+        >
+          Download .conf
+        </a>
+
+        {% if peer_view.provisioning_status not in ["removed", "pending_revoke"] %}
+        <button
+          type="button"
+          hx-post="/ui/peers/{{ peer_view.id }}/revoke"
+          hx-confirm="Revoke this peer? Access will be disabled."
+          hx-swap="none"
+          class="rounded-lg border border-red-800 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-900/70 transition-colors"
+        >
+          Revoke peer
+        </button>
+
+        <button
+          type="button"
+          hx-post="/ui/peers/{{ peer_view.id }}/regenerate"
+          hx-confirm="Regenerate keys for this peer? The old config will stop working immediately."
+          hx-swap="none"
+          hx-on::after-request="document.getElementById('modal-root').innerHTML=''"
+          class="rounded-lg border border-yellow-700 bg-yellow-900/40 px-4 py-2 text-sm font-medium text-yellow-300 hover:bg-yellow-900/70 transition-colors"
+        >
+          Regenerate keys
+        </button>
+        {% endif %}
+
+        <button
+          type="button"
+          class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+          onclick="document.getElementById('modal-root').innerHTML=''"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+
+    <!-- QR overlay over modal -->
+    <div
+      id="peer-qr-overlay"
+      class="hidden absolute inset-0 z-[80] flex items-center justify-center rounded-xl bg-slate-950/85 backdrop-blur-sm p-4"
+      onclick="if(event.target===this)this.classList.add('hidden')"
+    >
+      <div class="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+          <div>
+            <h3 class="text-sm font-semibold text-white">Peer QR</h3>
+            <p class="mt-1 text-xs text-slate-400">
+              Client config QR preview.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            onclick="document.getElementById('peer-qr-overlay').classList.add('hidden')"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="p-4">
+          <div class="rounded-xl bg-white p-3">
+            <img
+              src="/ui/peers/{{ peer_view.id }}/qr"
+              alt="Peer config QR"
+              class="mx-auto w-full max-w-sm rounded-lg"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function() {
+    function copyText(text, btnId) {
+      var btn = document.getElementById(btnId);
+      var orig = btn ? btn.textContent : '';
+
+      function markDone() {
+        if (btn) {
+          btn.textContent = '✓ Copied';
+          setTimeout(function() { btn.textContent = orig; }, 1500);
+        }
+      }
+
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(markDone).catch(function() {
+          fallback(text, markDone);
+        });
+      } else {
+        fallback(text, markDone);
+      }
+    }
+
+    function fallback(text, cb) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        if (cb) cb();
+      } catch (e) {
+        alert('Copy failed: ' + e);
+      }
+      document.body.removeChild(ta);
+    }
+
+    document.querySelectorAll('[data-copy]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        copyText(
+          btn.getAttribute('data-copy'),
+          btn.getAttribute('data-copy-target')
+        );
+      });
+    });
+  })();
+</script>
+

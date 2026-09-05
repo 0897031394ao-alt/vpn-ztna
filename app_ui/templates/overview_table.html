@@ -1,0 +1,46 @@
+<div id="overview-table">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-300">
+      <tr>
+        <th class="px-3 py-2 text-left">ID</th>
+        <th class="px-3 py-2 text-left">Username</th>
+        <th class="px-3 py-2 text-left">Email</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800 bg-slate-950/80">
+      {% for user in users %}
+      <tr class="hover:bg-slate-900/60">
+        <td class="px-3 py-2 text-slate-300 font-mono text-xs">{{ user.id }}</td>
+        <td class="px-3 py-2 text-slate-100 font-medium">{{ user.username }}</td>
+        <td class="px-3 py-2 text-slate-400 text-xs">{{ user.email }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="flex items-center justify-between mt-3 text-xs text-slate-400">
+    <button
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+      hx-get="/ui/overview/table?page={{ page-1 }}"
+      hx-target="#overview-table"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      {% if page <= 1 %}disabled{% endif %}
+    >
+      Prev
+    </button>
+
+    <span>Page {{ page }} / {{ total_pages }}</span>
+
+    <button
+      class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+      hx-get="/ui/overview/table?page={{ page+1 }}"
+      hx-target="#overview-table"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+      {% if page >= total_pages %}disabled{% endif %}
+    >
+      Next
+    </button>
+  </div>
+</div>

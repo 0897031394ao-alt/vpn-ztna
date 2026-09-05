@@ -1,0 +1,140 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+  <div class="w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <div class="flex items-start justify-between border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">
+          {% if user %}Edit User{% else %}Create User{% endif %}
+        </h2>
+        <p class="mt-1 text-sm text-slate-400">
+          {% if user %}
+          Update account settings, status and permissions.
+          {% else %}
+          Add a new user account to the VPN-ZTNA platform.
+          {% endif %}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
+        onclick="document.getElementById('modal-root').innerHTML='';"
+      >
+        Close
+      </button>
+    </div>
+
+    <div id="user-form-error"></div>
+
+    <form
+      class="space-y-5 px-6 py-5"
+      hx-post="{{ form_action }}"
+      hx-target="#users-table-wrapper"
+      hx-swap="outerHTML"
+      hx-on::after-request="if(event.detail.xhr.status < 400){ document.getElementById('modal-root').innerHTML=''; }"
+      hx-target-400="#user-form-error"
+      hx-target-409="#user-form-error"
+      hx-target-404="#user-form-error"
+    >
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Username</span>
+          <input
+            type="text"
+            name="username"
+            value="{{ user.username if user else '' }}"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="e.g. alice"
+            required
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Email</span>
+          <input
+            type="email"
+            name="email"
+            value="{{ user.email if user else '' }}"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="alice@example.com"
+            required
+          />
+        </label>
+      </div>
+
+      {% if not user %}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-sm text-slate-300">Password</span>
+          <input
+            type="password"
+            name="password"
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-cyan-500"
+            placeholder="Enter password"
+            required
+          />
+        </label>
+      </div>
+      {% endif %}
+
+      {% if groups is defined and groups %}
+      <div>
+        <div class="mb-2 text-sm text-slate-300">Groups</div>
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {% for group in groups %}
+          <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+            <input
+              type="checkbox"
+              name="group_ids"
+              value="{{ group.id }}"
+              {% if selected_group_ids is defined and group.id in selected_group_ids %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+            />
+            <span class="text-sm text-slate-300">
+              {{ group.name }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+          <input
+            type="checkbox"
+            name="is_active"
+            {% if not user or user.is_active %}checked{% endif %}
+            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+          />
+          <span class="text-sm text-slate-300">Active user</span>
+        </label>
+
+        <label class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+          <input
+            type="checkbox"
+            name="is_admin"
+            {% if user and user.is_admin %}checked{% endif %}
+            class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500"
+          />
+          <span class="text-sm text-slate-300">Administrator</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+        <button
+          type="button"
+          class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+          onclick="document.getElementById('modal-root').innerHTML='';"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+        >
+          {{ submit_label }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
