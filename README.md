@@ -1,58 +1,33 @@
-# VPN-ZTNA
+# VPN-ZTNA Platform
 
-Zero Trust Network Access на базе WireGuard, FastAPI, PostgreSQL.
+**Self‑hosted Zero Trust Network Access (ZTNA) на базе WireGuard, FastAPI, PostgreSQL и HTMX.**
 
-## Быстрый старт
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
+[![WireGuard](https://img.shields.io/badge/WireGuard-✔-orange.svg)](https://www.wireguard.com/)
 
-Установите Docker и Docker Compose:
-```bash
-sudo apt update && sudo apt install -y docker.io docker-compose
-sudo systemctl enable docker --now
-Клонируйте репозиторий:
+---
 
-bash
-git clone <your-repo-url> /opt/vpnztna
-cd /opt/vpnztna
-Настройте переменные окружения (скопируйте пример и отредактируйте):
+## �� О проекте
 
-bash
-cp .env.example .env.prod
-# Укажите POSTGRES_PASSWORD и SECRET_KEY
-Запустите production-сборку:
+VPN-ZTNA — это полностью self‑hosted платформа Zero Trust Network Access, которая сочетает в себе:
 
-bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-Проверьте работу:
+- **WireGuard** — быстрый и безопасный VPN-протокол.
+- **Динамические политики доступа** — разрешайте или запрещайте доступ к ресурсам на основе пользователей, групп и условий.
+- **Автоматическое provisioning** — при создании политики автоматически создаётся и настраивается WireGuard-пир для всех затронутых пользователей.
+- **Удобный веб‑интерфейс** — администрирование через современный HTMX-интерфейс с модальными окнами, пагинацией и фильтрацией.
+- **Полная наблюдаемость** — встроенные метрики Prometheus, аудит логов, health‑checks.
 
-bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
-curl http://localhost:8000/metrics
-API эндпоинты
-GET /health – проверка работоспособности
+Проект разработан как open‑source альтернатива коммерческим решениям (Tailscale, Twingate, Cloudflare Access) с полным контролем над данными и инфраструктурой.
 
-GET /ready – проверка готовности (БД)
+---
 
-GET /metrics – метрики Prometheus
+## �� Быстрый старт
 
-POST /api/v1/auth/login – получение JWT (OAuth2 form)
+### Требования
 
-GET /api/v1/peers – список пиров (только admin)
+- **Docker** и **Docker Compose** (установлены)
+- **Linux** (рекомендуется Ubuntu 22.04/24.04)
 
-Полная документация доступна по адресу http://localhost:8000/docs (Swagger UI).
-
-Тестирование
-bash
-cd api
-PYTHONPATH=. pytest -q
-Структура проекта
-api/ – бэкенд FastAPI (основное приложение)
-
-wg-gateway/ – микросервис управления WireGuard
-
-app_ui/ – шаблоны Jinja2 для интерфейса
-
-docker-compose.prod.yml – конфигурация для production
-
-Лицензия
-MIT
+### 1. Клонируйте репозиторий
