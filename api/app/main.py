@@ -12,8 +12,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import generate_latest, REGISTRY
 
 from app.api.ui_admin import ui_admin_router, get_current_user_from_cookie, load_dashboard_summary, require_ui_admin
 from app.api.ui_admin_fragments import ui_fragments_router
@@ -113,7 +111,6 @@ app.include_router(ui_fragments_router)
 app.mount("/static", StaticFiles(directory=str(UI_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(UI_DIR / "templates"))
 
-Instrumentator().instrument(app).expose(app)
 
 
 # ---------------------------------------------------------------------------
