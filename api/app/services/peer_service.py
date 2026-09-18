@@ -282,6 +282,18 @@ async def provision_peer_in_gateway(peer: Peer) -> None:
 async def provision_peer_by_id(db: AsyncSession, peer_id: int) -> Peer:
     peer = await get_peer_or_404(db, peer_id)
 
+    if peer.provisioning_status not in (
+        ProvisioningStatus.pending,
+        ProvisioningStatus.error,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Cannot provision a peer in status "
+                f"'{peer.provisioning_status.value}'"
+            ),
+        )
+
     try:
         await provision_peer_in_gateway(peer)
     except HTTPException as e:

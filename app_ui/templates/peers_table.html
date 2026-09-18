@@ -35,6 +35,11 @@
         hx-indicator="#peers-spinner"
         class="flex flex-col gap-2 sm:flex-row sm:items-center"
       >
+          <input
+            type="hidden"
+            name="page"
+            value="{{ page }}"
+          >
         <label class="flex items-center gap-2 text-sm text-slate-300">
           <span>Rows</span>
           <select
@@ -79,10 +84,10 @@
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-300">
-          <input type="hidden" name="hide_removed" value="0">
+          <input id="peers-hide-removed-value" type="hidden" name="hide_removed" value="{% if not filters or filters.hide_removed %}1{% else %}0{% endif %}">
           <input
             type="checkbox"
-            name="hide_removed"
+
             value="1"
             class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
             {% if not filters or filters.hide_removed %}checked{% endif %}
@@ -93,7 +98,7 @@
             hx-include="#peers-filters"
             hx-vals='{"page":1}'
             hx-indicator="#peers-spinner"
-          >
+           onchange="document.getElementById('peers-hide-removed-value').value=this.checked?'1':'0'">
           <span>Hide removed</span>
         </label>
       </form>
@@ -186,7 +191,9 @@
         {{ filters.status }}
       {% endif %}
     </span>
-    {% if not filters or filters.hide_removed %}
+    {% if filters and filters.status == "removed" %}
+      · showing removed peers
+    {% elif not filters or filters.hide_removed %}
       · removed hidden
     {% else %}
       · removed visible
@@ -319,7 +326,12 @@
         {% set routes_count = cidrs|length %}
         {% set s = peer.provisioning_status.value if peer.provisioning_status and peer.provisioning_status.value is defined else (peer.provisioning_status|string if peer.provisioning_status else "unknown") %}
 
-        <tr class="align-top transition-colors duration-150 hover:bg-slate-800/30">
+        <tr class="align-top transition-colors duration-150
+          {% if s == "removed" %}
+            bg-slate-950/40 opacity-80 hover:bg-slate-800/20
+          {% else %}
+            hover:bg-slate-800/30
+          {% endif %}">
           <td class="font-mono text-slate-200 px-4 py-3">{{ peer.id }}</td>
 
           <td class="px-4 py-3 text-slate-300">{{ peer.user_id }}</td>

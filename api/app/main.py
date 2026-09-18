@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 import logging
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import Depends, FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import generate_latest, REGISTRY
 
-from app.api.ui_admin import ui_admin_router, get_current_user_from_cookie, load_dashboard_summary
+from app.api.ui_admin import ui_admin_router, get_current_user_from_cookie, load_dashboard_summary, require_ui_admin
 from app.api.ui_admin_fragments import ui_fragments_router
 from app.api.ui_auth import ui_auth_router
 from app.api.v1.router import api_router
@@ -50,6 +50,55 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="VPN-ZTNA API", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def protect_direct_ui_routes(request: Request, call_next):
+    admin_ui_path = (
+        request.url.path.startswith("/ui/")
+        and request.url.path != "/ui/policy-explain"
+    )
+
+    if admin_ui_path:
+        current_user = await get_current_user_from_cookie(request)
+
+        if current_user is None:
+            is_htmx = (
+                request.headers.get("HX-Request", "").lower() == "true"
+            )
+
+            if is_htmx:
+                return Response(
+                    status_code=401,
+                    headers={
+                        "HX-Redirect": "/login",
+                        "Cache-Control": "no-store",
+                    },
+                )
+
+            return RedirectResponse(
+                url="/login",
+                status_code=303,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    return await call_next(request)
+
+@app.get("/", include_in_schema=False)
+async def public_portal_entry() -> RedirectResponse:
+    return RedirectResponse(
+        url="/ui/policy-explain",
+        status_code=303,
+    )
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_entry() -> RedirectResponse:
+    return RedirectResponse(
+        url="/dashboard",
+        status_code=303,
+    )
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = BASE_DIR / "app_ui"
@@ -111,18 +160,15 @@ async def dashboard_page(request: Request):
     )
 
 
-@app.get("/logout")
-async def logout():
-    response = RedirectResponse(url="/login", status_code=302)
-    response.delete_cookie("access_token")
-    return response
-
-
 # ---------------------------------------------------------------------------
 # Debug pages
 # ---------------------------------------------------------------------------
 
-@app.get("/debug/access", response_class=HTMLResponse)
+@app.get(
+    "/debug/access",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_ui_admin)],
+)
 async def ui_debug_access_page(request: Request):
     current_user = await get_current_user_from_cookie(request)
     return templates.TemplateResponse(
@@ -256,6 +302,44 @@ async def load_debug_check_options() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Peer table renderer
+# ---------------------------------------------------------------------------
+
+async def render_peers_table(
+    request: Request,
+    *,
+    status: str = "all",
+    hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
+    sync_result: dict | None = None,
+):
+    # Reuse the canonical paginated renderer behind GET /ui/peers/table.
+    from app.api.ui_admin_fragments import ui_peers_table
+
+    response = await ui_peers_table(
+        request=request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+    )
+
+    if sync_result is None:
+        return response
+
+    context = dict(response.context)
+    context["sync_result"] = sync_result
+
+    return templates.TemplateResponse(
+        request=request,
+        name="peers_table.html",
+        context=context,
+        status_code=response.status_code,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Peer actions
 # ---------------------------------------------------------------------------
 
@@ -265,23 +349,18 @@ async def ui_peers_recalculate(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
     async with AsyncSessionLocal() as db:
         await recalculate_peer_by_id(db, peer_id)
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-        }
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -291,23 +370,18 @@ async def ui_peers_provision(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
     async with AsyncSessionLocal() as db:
         await provision_peer_by_id(db, peer_id)
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-        }
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -317,23 +391,18 @@ async def ui_peers_retry(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
     async with AsyncSessionLocal() as db:
         await provision_peer_by_id(db, peer_id)
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-        }
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -343,56 +412,67 @@ async def ui_peers_remove(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
     async with AsyncSessionLocal() as db:
         await remove_peer_by_id(db, peer_id)
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-        }
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
     )
 
 
-@app.post("/ui/peers/{peer_id}/revoke")
-async def ui_peer_revoke(peer_id: int):
+@app.post("/ui/peers/{peer_id}/revoke", response_class=HTMLResponse)
+async def ui_peer_revoke(
+    peer_id: int,
+    request: Request,
+    status: str = "all",
+    hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
+):
     async with AsyncSessionLocal() as db:
-        peer = await db.get(Peer, peer_id)
-        if not peer:
-            return PlainTextResponse("Peer not found.\n", status_code=404)
-        if peer.provisioning_status in (
-            ProvisioningStatus.pending_revoke,
-            ProvisioningStatus.removed,
-        ):
-            return Response(status_code=200, headers={"HX-Refresh": "true"})
-        if not peer.public_key:
-            return PlainTextResponse(
-                "Peer has no public key, cannot schedule revoke.\n",
-                status_code=400,
-            )
-        peer.provisioning_status = ProvisioningStatus.pending_revoke
-        peer.provisioning_error = "Waiting for provisioning agent to revoke peer"
-        await db.commit()
-    return Response(status_code=200, headers={"HX-Refresh": "true"})
+        await remove_peer_by_id(db, peer_id)
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+    )
 
 
-@app.post("/ui/peers/{peer_id}/regenerate")
-async def ui_peer_regenerate(peer_id: int):
+@app.post("/ui/peers/{peer_id}/regenerate", response_class=HTMLResponse)
+async def ui_peer_regenerate(
+    peer_id: int,
+    request: Request,
+    status: str = "all",
+    hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
+):
     async with AsyncSessionLocal() as db:
         try:
             await regenerate_peer_keys(db, peer_id)
-        except HTTPException as e:
-            return PlainTextResponse(str(e.detail), status_code=e.status_code)
-    return Response(status_code=200, headers={"HX-Refresh": "true"})
+        except HTTPException as exc:
+            return PlainTextResponse(
+                str(exc.detail),
+                status_code=exc.status_code,
+            )
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @app.post("/ui/peers/sync-all", response_class=HTMLResponse)
@@ -400,7 +480,33 @@ async def ui_peers_sync_all(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
+    form = await request.form()
+
+    # Bulk table state from HTMX form body.
+    status = str(form.get("status", status) or status)
+
+    try:
+        hide_removed = int(form.get("hide_removed", hide_removed))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        page = max(int(form.get("page", page)), 1)
+    except (TypeError, ValueError):
+        pass
+
+
+    try:
+        page_size = int(form.get("page_size", page_size))
+    except (TypeError, ValueError):
+        pass
+
+    if page_size not in {5, 10, 25, 50, 100}:
+        page_size = 10
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Peer.id)
@@ -410,28 +516,24 @@ async def ui_peers_sync_all(
         pending_ids = list(result.scalars().all())
 
     errors = []
-    for pid in pending_ids:
+
+    for peer_id in pending_ids:
         try:
             async with AsyncSessionLocal() as db:
-                await provision_peer_by_id(db, pid)
-        except Exception as e:
-            errors.append(f"peer_id={pid}: {e}")
+                await provision_peer_by_id(db, peer_id)
+        except Exception as exc:
+            errors.append(f"peer_id={peer_id}: {exc}")
 
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-            "sync_result": {"processed": len(pending_ids), "errors": errors},
-        }
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+        sync_result={
+            "processed": len(pending_ids),
+            "errors": errors,
+        },
     )
 
 
@@ -440,7 +542,33 @@ async def ui_peers_retry_errors(
     request: Request,
     status: str = "all",
     hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
 ):
+    form = await request.form()
+
+    # Bulk table state from HTMX form body.
+    status = str(form.get("status", status) or status)
+
+    try:
+        hide_removed = int(form.get("hide_removed", hide_removed))
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        page = max(int(form.get("page", page)), 1)
+    except (TypeError, ValueError):
+        pass
+
+
+    try:
+        page_size = int(form.get("page_size", page_size))
+    except (TypeError, ValueError):
+        pass
+
+    if page_size not in {5, 10, 25, 50, 100}:
+        page_size = 10
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Peer.id)
@@ -450,27 +578,23 @@ async def ui_peers_retry_errors(
         error_ids = list(result.scalars().all())
 
     errors = []
-    for pid in error_ids:
+
+    for peer_id in error_ids:
         try:
             async with AsyncSessionLocal() as db:
-                await provision_peer_by_id(db, pid)
-        except Exception as e:
-            errors.append(f"peer_id={pid}: {e}")
+                await provision_peer_by_id(db, peer_id)
+        except Exception as exc:
+            errors.append(f"peer_id={peer_id}: {exc}")
 
-    peers, filters = await load_peers_filtered(status, hide_removed)
-    return templates.TemplateResponse(
-        request=request,
-        name="peers_table.html",
-        context={
-            "peers": peers,
-            "page": filters.get("page", 1),
-            "pagesize": filters.get("pagesize", 10),
-            "status": filters.get("status", status),
-            "hide_removed": filters.get("hide_removed", hide_removed),
-            "total": filters.get("total", len(peers)),
-            "total_pages": filters.get("total_pages", 1),
-            "filters": filters,
-            "sync_result": {"processed": len(error_ids), "errors": errors},
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+        sync_result={
+            "processed": len(error_ids),
+            "errors": errors,
         },
     )
 
@@ -478,46 +602,6 @@ async def ui_peers_retry_errors(
 # ---------------------------------------------------------------------------
 # Users toggle (HTMX actions из таблицы)
 # ---------------------------------------------------------------------------
-
-@app.post("/ui/users/{user_id}/toggle-active", response_class=HTMLResponse)
-async def ui_users_toggle_active(
-    user_id: int,
-    request: Request,
-    status: str = "active",
-):
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if user:
-            user.is_active = not user.is_active
-            await db.commit()
-    users_rows, filters = await _load_users_for_table(status)
-    return templates.TemplateResponse(
-        request=request,
-        name="users_table.html",
-        context={"users": users_rows, "filters": filters},
-    )
-
-
-@app.post("/ui/users/{user_id}/toggle-admin", response_class=HTMLResponse)
-async def ui_users_toggle_admin(
-    user_id: int,
-    request: Request,
-    status: str = "active",
-):
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if user:
-            user.is_admin = not user.is_admin
-            await db.commit()
-    users_rows, filters = await _load_users_for_table(status)
-    return templates.TemplateResponse(
-        request=request,
-        name="users_table.html",
-        context={"users": users_rows, "filters": filters},
-    )
-
 
 async def _load_users_for_table(
     status: str = "active",

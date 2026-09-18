@@ -44,6 +44,87 @@ async def _auth_delete(asyncclient, path: str, token: str):
     )
 
 
+async def test_ui_user_toggle_routes_are_unique():
+    from app.main import app
+
+    targets = {
+        "/ui/users/{user_id}/toggle-active": (
+            "app.api.ui_admin_fragments.ui_user_toggle_active"
+        ),
+        "/ui/users/{user_id}/toggle-admin": (
+            "app.api.ui_admin_fragments.ui_user_toggle_admin"
+        ),
+    }
+
+    found = {path: [] for path in targets}
+
+    def join_path(prefix: str, path: str) -> str:
+        prefix = prefix or ""
+        path = path or ""
+
+        if not prefix:
+            return path or "/"
+
+        if not path or path == "/":
+            return prefix or "/"
+
+        return prefix.rstrip("/") + "/" + path.lstrip("/")
+
+    def visit(routes, prefix: str = ""):
+        for route in routes:
+            included = getattr(route, "original_router", None)
+
+            if included is not None:
+                context = getattr(route, "include_context", None)
+                nested_prefix = getattr(context, "prefix", "") or ""
+
+                visit(
+                    getattr(included, "routes", []),
+                    join_path(prefix, nested_prefix),
+                )
+                continue
+
+            path = getattr(route, "path", None)
+            methods = set(getattr(route, "methods", set()) or set())
+
+            if not path:
+                continue
+
+            full_path = join_path(prefix, path)
+
+            if full_path not in targets:
+                continue
+
+            endpoint = getattr(route, "endpoint", None)
+            label = (
+                f"{getattr(endpoint, '__module__', '?')}."
+                f"{getattr(endpoint, '__name__', '?')}"
+            )
+
+            found[full_path].append(
+                {
+                    "methods": methods,
+                    "label": label,
+                    "dependencies": len(
+                        getattr(route, "dependencies", []) or []
+                    ),
+                }
+            )
+
+    visit(app.routes)
+
+    for path, expected_handler in targets.items():
+        entries = found[path]
+
+        assert len(entries) == 1, (path, entries)
+
+        entry = entries[0]
+
+        assert "POST" in entry["methods"], entry
+        assert entry["label"] == expected_handler, entry
+        assert entry["dependencies"] >= 1, entry
+
+
 async def test_login_creates_session_and_me_returns_current_user(
     asyncclient,
     seeded_db,

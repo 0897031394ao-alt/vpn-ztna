@@ -187,3 +187,8 @@ api/app/api/ui_admin_fragments.py.bak*
 api/app/services/peer_service.py.bak*
 app_ui/templates/*.bak*
 docker-compose*.bak*
+
+# Operational backups and database exports kept locally
+/backup-*.tar.gz
+/backup-*.dump
+/backup-*.csv

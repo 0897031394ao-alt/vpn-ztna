@@ -9,19 +9,30 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   api:
     image: vpnztna-api:saved-2026-07-20
     build: ./api
     restart: unless-stopped
     network_mode: host
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8000"
+    env_file:
+      - /etc/vpnztna/wg-gateway.env
     volumes:
       - ./api:/app
       - ./app_ui:/app/app_ui
     environment:
       DATABASE_URL: postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna
       SECRET_KEY: dev-secret-change
+      WG_GATEWAY_URL: "http://127.0.0.1:51821"
+      UI_COOKIE_SECURE: "true"
     depends_on:
       - postgres
 
@@ -30,11 +41,15 @@ services:
     build: ./api
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - /etc/vpnztna/wg-gateway.env
     volumes:
       - ./api:/app
     environment:
       DATABASE_URL: postgresql+asyncpg://vpnztna:changeme@localhost:5432/vpnztna
       SECRET_KEY: dev-secret-change
+      WG_GATEWAY_URL: "http://127.0.0.1:51821"
+      UI_COOKIE_SECURE: "true"
     depends_on:
       - postgres
       - wg-gateway
@@ -45,7 +60,16 @@ services:
     build: ./wg-gateway
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - /etc/vpnztna/wg-gateway.env
     privileged: true
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "51821"
     environment:
       WG_INTERFACE: wg0
       WG_PORT: "51820"
@@ -53,6 +77,7 @@ services:
       WG_PRIVATE_KEY_FILE: /data/server.key
     volumes:
       - ./wg-gateway/data:/data
+      - ./wg-gateway/app/main.py:/app/app/main.py:ro
 
   ssh-lab:
     image: lscr.io/linuxserver/openssh-server:latest

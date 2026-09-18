@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Request
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
@@ -6,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
 from app.models.user import User
+from app.models.auth_session import AuthSession
 from app.models.tenant import Tenant
 from app.models.peer import Peer, ProvisioningStatus
 from app.models.policy import Policy
@@ -14,31 +17,104 @@ from app.core.security import decode_access_token, create_access_token
 
 templates = Jinja2Templates(directory="/app/app_ui/templates")
 
-ui_admin_router = APIRouter(tags=["ui-admin"])
-
-
 async def get_current_user_from_cookie(request: Request) -> User | None:
+    cached_user = getattr(request.state, "current_user", None)
+    if cached_user is not None:
+        return cached_user
+
     raw_cookie = request.cookies.get("access_token")
-    token = None
-    if raw_cookie:
-        token = raw_cookie[7:] if raw_cookie.startswith("Bearer ") else raw_cookie
+    if not raw_cookie:
+        return None
+
+    token = raw_cookie.strip()
+    if token.startswith("Bearer "):
+        token = token[len("Bearer "):].strip()
 
     payload = decode_access_token(token)
     if not payload:
         return None
 
     subject = payload.get("sub")
-    if not subject:
-        return None
+    token_version = payload.get("ver")
+    session_uuid = str(payload.get("sid") or "").strip()
 
     try:
         user_id = int(subject)
+        token_version = int(token_version)
     except (TypeError, ValueError):
         return None
 
+    if not session_uuid:
+        return None
+
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
+        user = await db.scalar(
+            select(User).where(User.id == user_id)
+        )
+        if user is None:
+            return None
+
+        if not user.is_active or not user.is_admin:
+            return None
+
+        if int(user.token_version) != token_version:
+            return None
+
+        auth_session = await db.scalar(
+            select(AuthSession).where(
+                AuthSession.session_uuid == session_uuid,
+                AuthSession.user_id == user.id,
+            )
+        )
+        if auth_session is None or auth_session.is_revoked:
+            return None
+
+        expires_at = auth_session.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        else:
+            expires_at = expires_at.astimezone(timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        if expires_at <= now:
+            auth_session.is_revoked = True
+            auth_session.revoked_at = now
+            auth_session.last_seen_at = now
+            await db.commit()
+            return None
+
+        request.state.current_user = user
+        request.state.current_user_id = user.id
+        request.state.session_uuid = auth_session.session_uuid
+        request.state.auth_session_id = auth_session.id
+
+        return user
+
+
+async def require_ui_admin(request: Request) -> User:
+    current_user = await get_current_user_from_cookie(request)
+    if current_user is not None:
+        return current_user
+
+    is_htmx = request.headers.get("HX-Request", "").lower() == "true"
+    if is_htmx:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+            headers={"HX-Redirect": "/login"},
+        )
+
+    raise HTTPException(
+        status_code=303,
+        detail="Authentication required",
+        headers={"Location": "/login"},
+    )
+
+
+ui_admin_router = APIRouter(
+    tags=["ui-admin"],
+    dependencies=[Depends(require_ui_admin)],
+)
 
 
 async def load_dashboard_summary() -> dict:
@@ -92,11 +168,6 @@ async def load_dashboard_summary() -> dict:
             "total": total_tenants or 0,
         },
     }
-
-
-@ui_admin_router.get("/")
-async def ui_root():
-    return RedirectResponse(url="/dashboard", status_code=307)
 
 
 @ui_admin_router.get("/dashboard", response_class=HTMLResponse)

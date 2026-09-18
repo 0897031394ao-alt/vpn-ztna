@@ -1,14 +1,18 @@
-{% set status_raw = peer_view.provisioning_status|string %}
-{% if '.' in status_raw %}
-  {% set status = status_raw.split('.')[-1] %}
-{% else %}
-  {% set status = status_raw %}
+{% set status = peer_view.status or "unknown" %}
+
+{% if status in ["removed", "pending_revoke"] %}
+<style>
+  #peer-modal-overlay .peer-config-action {
+    display: none !important;
+  }
+</style>
 {% endif %}
+
 
 <div
   id="peer-modal-overlay"
   class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-  onclick="if(event.target===this)document.getElementById('modal-root').innerHTML=''"
+  onclick="if(event.target===this)this.remove()"
 >
   <div class="relative w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
 
@@ -37,116 +41,221 @@
       <button
         type="button"
         class="rounded-md px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-white"
-        onclick="document.getElementById('modal-root').innerHTML=''"
+        onclick="this.closest('#peer-modal-overlay').remove()"
       >
         ✕ Close
       </button>
     </div>
 
-    <!-- Body -->
-    <div class="grid grid-cols-1 gap-6 px-6 py-5 lg:grid-cols-2">
+      <!-- Body -->
+      <div class="grid grid-cols-1 gap-6 px-6 py-5 lg:grid-cols-2">
 
-      <!-- Левая колонка -->
-      <div class="space-y-4">
+        <!-- Left column -->
+        <div class="space-y-4">
 
-        <div>
-          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">VPN IP</div>
-          <div class="flex items-center gap-2">
-            <span class="font-mono text-sm text-cyan-400" id="peer-vpn-ip">{{ peer_view.vpn_ip or "—" }}</span>
-            {% if peer_view.vpn_ip %}
-            <button
-              data-copy="{{ peer_view.vpn_ip }}"
-              data-copy-target="copy-ip"
-              id="copy-ip"
-              class="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 hover:bg-slate-800 hover:text-white transition-colors"
-            >Copy</button>
-            {% endif %}
-          </div>
-        </div>
-
-        <div>
-          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">Public key</div>
-          <div class="relative">
-            <div class="break-all rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 pr-16 font-mono text-xs text-slate-300">
-              {{ peer_view.public_key or "—" }}
+          <div>
+            <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
+              VPN IP
             </div>
-            {% if peer_view.public_key %}
-            <button
-              data-copy="{{ peer_view.public_key }}"
-              data-copy-target="copy-pk"
-              id="copy-pk"
-              class="absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:text-white transition-colors"
-            >Copy</button>
-            {% endif %}
-          </div>
-        </div>
-
-        <div>
-          <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">Timestamps</div>
-          <div class="space-y-1.5 text-sm text-slate-300">
-            <div class="flex gap-2">
-              <span class="w-20 shrink-0 text-slate-500">Created</span>
-              <span>{{ peer_view.created_at or "—" }}</span>
-            </div>
-            <div class="flex gap-2">
-              <span class="w-20 shrink-0 text-slate-500">Updated</span>
-              <span>{{ peer_view.updated_at or "—" }}</span>
+            <div class="flex items-center gap-2">
+              <span
+                id="peer-vpn-ip"
+                class="font-mono text-sm text-cyan-400"
+              >{{ peer_view.vpn_ip or "—" }}</span>
+              {% if peer_view.vpn_ip %}
+              <button
+                data-copy="{{ peer_view.vpn_ip }}"
+                data-copy-target="copy-ip"
+                id="copy-ip"
+                class="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              >Copy</button>
+              {% endif %}
             </div>
           </div>
-        </div>
 
-        {% if peer_view.provisioning_error %}
-        <div>
-          <div class="mb-1.5 text-xs uppercase tracking-wide text-rose-500">Provisioning error</div>
-          <div class="rounded-lg border border-red-900 bg-red-950/50 p-3">
-            <div class="break-words text-sm text-red-300">{{ peer_view.provisioning_error }}</div>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Правая колонка — routes -->
-      <div class="space-y-4">
-        <div>
-          <div class="mb-1.5 flex items-center justify-between">
-            <div class="text-xs uppercase tracking-wide text-slate-500">
-              Allowed IPs
-              <span class="ml-1 font-medium text-slate-300">{{ peer_view.routes_count }}</span>
+          <div>
+            <div class="mb-1.5 text-xs uppercase tracking-wide text-slate-500">
+              Public key
             </div>
-            {% if peer_view.allowed_ips %}
-            <button
-              data-copy="{{ peer_view.allowed_ips }}"
-              data-copy-target="copy-routes"
-              id="copy-routes"
-              class="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 border border-slate-700 hover:bg-slate-800 hover:text-white transition-colors"
-            >Copy all</button>
-            {% endif %}
+            <div class="relative">
+              <div class="break-all rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 pr-16 font-mono text-xs text-slate-300">
+                {{ peer_view.public_key or "—" }}
+              </div>
+              {% if peer_view.public_key %}
+              <button
+                data-copy="{{ peer_view.public_key }}"
+                data-copy-target="copy-pk"
+                id="copy-pk"
+                class="absolute right-2 top-2 rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              >Copy</button>
+              {% endif %}
+            </div>
           </div>
-          <div class="max-h-80 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-3">
-            {% if peer_view.cidrs %}
+
+          <div>
+            <div class="mb-2 text-xs uppercase tracking-wide text-slate-500">
+              Timestamps
+            </div>
+
+            <div class="space-y-2 text-sm">
+              <div class="flex items-baseline gap-3">
+                <span class="w-28 shrink-0 text-slate-500">Created</span>
+                <span class="whitespace-nowrap font-mono text-xs text-slate-300">{{ peer_view.created_at or "—" }}</span>
+              </div>
+
+              <div class="flex items-baseline gap-3">
+                <span class="w-28 shrink-0 text-slate-500">Updated</span>
+                <span class="whitespace-nowrap font-mono text-xs text-slate-300">{{ peer_view.updated_at or "—" }}</span>
+              </div>
+
+              {% if status == "removed" %}
+              <div class="flex items-baseline gap-3">
+                <span class="w-28 shrink-0 text-slate-500">Removed</span>
+                {% if peer_view.revoked_at %}
+                <span class="whitespace-nowrap font-mono text-xs text-slate-300">{{ peer_view.revoked_at }}</span>
+                {% else %}
+                <span class="text-slate-500">Removal time unavailable</span>
+                {% endif %}
+              </div>
+
+              <div class="flex items-baseline gap-3">
+                <span class="w-28 shrink-0 text-slate-500">Retention ends</span>
+                {% if peer_view.purge_at %}
+                <span class="whitespace-nowrap font-mono text-xs text-slate-300">{{ peer_view.purge_at }}</span>
+                {% else %}
+                <span class="text-slate-500">Schedule unavailable</span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if status == "removed" %}
+          <div class="removed-modal-state rounded-lg border border-slate-700 bg-slate-950/60 p-3">
+            <div class="flex items-start gap-2">
+              <svg
+                class="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18 18 6M6 6l12 12"
+                />
+              </svg>
+              <div>
+                <div class="text-sm font-medium text-slate-200">
+                  VPN access revoked
+                </div>
+                <p class="mt-1 text-xs leading-5 text-slate-400">
+                  This peer has been removed from the VPN. Client configuration
+                  and QR export are no longer available.
+                </p>
+              </div>
+            </div>
+          </div>
+          {% elif status == "pending_revoke" %}
+          <div class="removed-modal-state rounded-lg border border-orange-800 bg-orange-950/25 p-3">
+            <div class="text-sm font-medium text-orange-300">
+              Revocation in progress
+            </div>
+            <p class="mt-1 text-xs leading-5 text-orange-200/70">
+              VPN access is being revoked. Configuration and QR export are
+              unavailable while this operation completes.
+            </p>
+          </div>
+          {% endif %}
+
+          {% if peer_view.provisioning_error %}
+          <div>
+            <div class="mb-1.5 text-xs uppercase tracking-wide
+              {% if status == 'error' %}text-rose-500{% else %}text-amber-500{% endif %}">
+              {% if status == 'error' %}
+                Provisioning error
+              {% else %}
+                Provisioning state
+              {% endif %}
+            </div>
+
+            <div class="rounded-lg border p-3
+              {% if status == 'error' %}
+                border-red-900 bg-red-950/50
+              {% else %}
+                border-amber-800 bg-amber-950/30
+              {% endif %}">
+              <div class="break-words text-sm
+                {% if status == 'error' %}
+                  text-red-300
+                {% else %}
+                  text-amber-300
+                {% endif %}">
+                {{ peer_view.provisioning_error }}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Right column: routes -->
+        <div class="space-y-4">
+          <div>
+            <div class="mb-1.5 flex items-center justify-between">
+              <div class="text-xs uppercase tracking-wide text-slate-500">
+                Allowed IPs
+                <span class="ml-1 font-medium text-slate-300">
+                  {{ peer_view.routes_count }}
+                </span>
+              </div>
+              {% if peer_view.allowed_ips %}
+              <button
+                data-copy="{{ peer_view.allowed_ips }}"
+                data-copy-target="copy-routes"
+                id="copy-routes"
+                class="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              >Copy all</button>
+              {% endif %}
+            </div>
+
+            <div class="max-h-80 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-3">
+              {% if peer_view.cidrs %}
               <div class="space-y-1">
                 {% for cidr in peer_view.cidrs %}
-                <div class="break-all font-mono text-xs text-slate-300">{{ cidr }}</div>
+                <div class="break-all font-mono text-xs text-slate-300">
+                  {{ cidr }}
+                </div>
                 {% endfor %}
               </div>
-            {% else %}
-              <div class="text-sm text-slate-500">No routes assigned.</div>
-            {% endif %}
+              {% else %}
+              <div class="text-sm text-slate-500">
+                No routes assigned.
+              </div>
+              {% endif %}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
         <!-- Footer actions -->
     <div class="flex flex-col gap-3 border-t border-slate-800 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="text-xs text-slate-500">
-        Downloaded config contains the current peer settings.
+        {% if status in ["removed", "pending_revoke"] %}
+          <span class="inline-flex items-center gap-1 text-slate-500">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-slate-600"></span>
+            Config unavailable after revocation
+          </span>
+          {% else %}
+          Downloaded config contains the current peer settings.
+          {% endif %}
       </div>
 
       <div class="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
-          class="rounded-lg border border-emerald-700 bg-emerald-900/40 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900 transition-colors"
+          class="peer-config-action rounded-lg border border-emerald-700 bg-emerald-900/40 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900 transition-colors"
           onclick="document.getElementById('peer-qr-overlay').classList.remove('hidden')"
         >
           Show QR
@@ -154,38 +263,49 @@
 
         <a
           href="/ui/peers/{{ peer_view.id }}/config"
-          class="rounded-lg border border-cyan-700 bg-cyan-900/40 px-4 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-900 transition-colors"
+          class="peer-config-action rounded-lg border border-cyan-700 bg-cyan-900/40 px-4 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-900 transition-colors"
         >
           Download .conf
         </a>
 
-        {% if peer_view.provisioning_status not in ["removed", "pending_revoke"] %}
-        <button
-          type="button"
-          hx-post="/ui/peers/{{ peer_view.id }}/revoke"
-          hx-confirm="Revoke this peer? Access will be disabled."
-          hx-swap="none"
-          class="rounded-lg border border-red-800 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-900/70 transition-colors"
-        >
-          Revoke peer
-        </button>
 
-        <button
-          type="button"
-          hx-post="/ui/peers/{{ peer_view.id }}/regenerate"
-          hx-confirm="Regenerate keys for this peer? The old config will stop working immediately."
-          hx-swap="none"
-          hx-on::after-request="document.getElementById('modal-root').innerHTML=''"
-          class="rounded-lg border border-yellow-700 bg-yellow-900/40 px-4 py-2 text-sm font-medium text-yellow-300 hover:bg-yellow-900/70 transition-colors"
-        >
-          Regenerate keys
-        </button>
-        {% endif %}
+          {% if status not in ["removed", "pending_revoke"] %}
+          <button
+            type="button"
+            hx-post="/ui/peers/{{ peer_view.id }}/revoke"
+            hx-target="#peers-table-wrapper"
+            hx-swap="outerHTML"
+            hx-include="#peers-filters"
+            hx-indicator="#peers-spinner"
+            hx-confirm="Revoke this peer? Access will be disabled."
+            hx-on::after-request="if(event.detail.successful){const modal=this.closest('#peer-modal-overlay');if(modal)modal.remove();}"
+            class="rounded-lg border border-red-800 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-900/70 transition-colors"
+          >
+            Revoke peer
+          </button>
+          {% endif %}
+
+          {% if status in ["provisioned", "error"] %}
+          <button
+            type="button"
+            hx-post="/ui/peers/{{ peer_view.id }}/regenerate"
+            hx-target="#peers-table-wrapper"
+            hx-swap="outerHTML"
+            hx-include="#peers-filters"
+            hx-indicator="#peers-spinner"
+            hx-confirm="Regenerate keys for this peer? The old config will stop working immediately."
+            hx-on::after-request="if(event.detail.successful){const modal=this.closest('#peer-modal-overlay');if(modal)modal.remove();}"
+            class="rounded-lg border border-yellow-700 bg-yellow-900/40 px-4 py-2 text-sm font-medium text-yellow-300 hover:bg-yellow-900/70 transition-colors"
+          >
+            Regenerate keys
+          </button>
+          {% endif %}
+
 
         <button
           type="button"
           class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-          onclick="document.getElementById('modal-root').innerHTML=''"
+          onclick="this.closest('#peer-modal-overlay').remove()"
         >
           Close
         </button>

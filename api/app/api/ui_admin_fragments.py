@@ -1,4 +1,5 @@
 import io
+from datetime import timedelta, timezone
 import json
 from typing import Optional
 from uuid import UUID
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_admin
+from app.api.ui_admin import require_ui_admin
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.auth_session import AuthSession
@@ -59,8 +61,10 @@ from app.services.group_service import (
 
 templates = Jinja2Templates(directory="/app/app_ui/templates")
 
-# ВАЖНО: убрали dependencies=[Depends(get_current_admin)]
-ui_fragments_router = APIRouter()
+# All /ui/* routes are protected by the central UI auth middleware.
+ui_fragments_router = APIRouter(
+    dependencies=[Depends(require_ui_admin)],
+)
 
 
 async def get_active_resource_or_404(db: AsyncSession, resource_id: int) -> Resource:
@@ -2486,6 +2490,25 @@ async def ui_peer_details(request: Request, peer_id: int):
             "provisioning_error": getattr(peer, "provisioning_error", None),
             "created_at": peer.created_at.strftime("%Y-%m-%d %H:%M") if getattr(peer, "created_at", None) else "—",
             "updated_at": peer.updated_at.strftime("%Y-%m-%d %H:%M") if getattr(peer, "updated_at", None) else "—",
+            "revoked_at": (
+                peer.revoked_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+                if getattr(peer, "revoked_at", None)
+                else None
+            ),
+            "purge_at": (
+                (
+                    (
+                        peer.revoked_at
+                        if peer.revoked_at.tzinfo is not None
+                        else peer.revoked_at.replace(tzinfo=timezone.utc)
+                    )
+                    .astimezone(timezone.utc)
+                    + timedelta(days=30)
+                )
+                .strftime("%Y-%m-%d %H:%M:%S UTC")
+                if getattr(peer, "revoked_at", None)
+                else None
+            ),
         },
     }
 
@@ -2496,52 +2519,7 @@ async def ui_peer_details(request: Request, peer_id: int):
     )
 
 
-@ui_fragments_router.post("/ui/peers/{peer_id}/regenerate", response_class=HTMLResponse)
-async def ui_peer_regenerate(request: Request, peer_id: int):
-    async with AsyncSessionLocal() as db:
-        try:
-            peer = await regenerate_peer_keys(db, peer_id)
-        except HTTPException as exc:
-            return HTMLResponse(
-                f"<div class='px-4 py-3 text-sm text-rose-300'>{exc.detail}</div>",
-                status_code=exc.status_code,
-            )
-        except Exception as exc:
-            await db.rollback()
-            return HTMLResponse(
-                f"<div class='px-4 py-3 text-sm text-rose-300'>{str(exc)}</div>",
-                status_code=500,
-            )
-
-        allowed = peer.allowed_ips or ""
-        cidrs = [item.strip() for item in allowed.split(",") if item.strip()]
-
-        context = {
-            "peer": peer,
-            "peer_view": {
-                "id": peer.id,
-                "user_id": peer.user_id,
-                "vpn_ip": peer.vpn_ip,
-                "public_key": peer.public_key,
-                "allowed_ips": allowed,
-                "cidrs": cidrs,
-                "routes_count": len(cidrs),
-                "status": peer.provisioning_status.value
-                if peer.provisioning_status
-                else "unknown",
-                "provisioning_error": getattr(peer, "provisioning_error", None),
-                "created_at": peer.created_at.strftime("%Y-%m-%d %H:%M") if getattr(peer, "created_at", None) else "—",
-                "updated_at": peer.updated_at.strftime("%Y-%m-%d %H:%M") if getattr(peer, "updated_at", None) else "—",
-            },
-        }
-
-    response = templates.TemplateResponse(
-        request=request,
-        name="peer_details_modal.html",
-        context=context,
-    )
-    response.headers["HX-Trigger"] = "peerRegenerated"
-    return response
+# Peer regeneration is handled by app.main.ui_peer_regenerate.
 
 
 @ui_fragments_router.get("/ui/peers/{peer_id}/config")

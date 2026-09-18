@@ -93,6 +93,19 @@ async def policy_explain_page() -> str:
       font-size: 0.95rem;
     }
 
+    .help-link {
+      color: var(--primary);
+      font-weight: 650;
+      text-decoration: none;
+      text-underline-offset: 3px;
+    }
+
+    .help-link:hover,
+    .help-link:focus-visible {
+      color: var(--primary-hover);
+      text-decoration: underline;
+    }
+
     label {
       display: block;
       margin-bottom: 6px;
@@ -386,15 +399,15 @@ async def policy_explain_page() -> str:
     <div class="hero">
       <h1>VPN-ZTNA User Portal</h1>
       <p>
-        Sign in to review your current access policy, inspect the resulting routes,
-        and download your WireGuard client configuration.
+        Review your assigned VPN access, download your WireGuard configuration,
+        and connect securely from this device.
       </p>
     </div>
 
     <div class="grid">
       <div class="card">
         <h2>Sign in</h2>
-        <div class="subtle">Use your portal credentials to load your assigned peer access.</div>
+        <div class="subtle">Sign in with the VPN-ZTNA credentials provided by your administrator.</div>
 
         <form id="login-form" style="margin-top:14px;">
           <label for="username">Username</label>
@@ -415,15 +428,25 @@ async def policy_explain_page() -> str:
       </div>
 
       <div class="card">
-        <h2>How to use this portal</h2>
+        <h2>Get connected</h2>
         <ol class="help-list">
-          <li>Sign in with your VPN-ZTNA username and password.</li>
-          <li>Review your effective access mode and resulting allowed routes.</li>
-          <li>Download your WireGuard config and import it into the WireGuard client.</li>
-          <li>Insert your own client private key into the config before connecting.</li>
+          <li>Sign in with the username and password supplied by your administrator.</li>
+          <li>Review the access mode and routes currently assigned to your account.</li>
+          <li>
+            Download your configuration, import it into
+            <a
+              class="help-link"
+              href="https://www.wireguard.com/install/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >WireGuard ↗</a>,
+            then activate the tunnel.
+          </li>
+          <li>Keep your WireGuard private key secret. Never send it to another person.</li>
         </ol>
+
         <div class="footer-note">
-          This page uses the same API as the CLI and reflects the current policy state for the authenticated user.
+          The portal reflects the current policy state for the authenticated user.
         </div>
       </div>
     </div>
