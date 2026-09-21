@@ -97,6 +97,22 @@ async def admin_entry() -> RedirectResponse:
         status_code=303,
     )
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    current_user = await get_current_user_from_cookie(request)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    summary = await load_dashboard_summary()
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "active_page": "/dashboard",
+            "current_user": current_user,
+            "summary": summary,
+        },
+    )
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = BASE_DIR / "app_ui"
@@ -134,27 +150,6 @@ async def ready():
         "status": "ready" if db_ok else "unhealthy",
         "database": "ok" if db_ok else "failed",
     }
-
-
-# ---------------------------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------------------------
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
-    current_user = await get_current_user_from_cookie(request)
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=302)
-    summary = await load_dashboard_summary()
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={
-            "active_page": "/dashboard",
-            "current_user": current_user,
-            "summary": summary,
-        },
-    )
 
 
 # ---------------------------------------------------------------------------
