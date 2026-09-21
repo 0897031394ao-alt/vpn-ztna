@@ -2,6 +2,7 @@ import io
 from datetime import timedelta, timezone
 import json
 from typing import Optional
+from urllib.parse import urlencode
 from uuid import UUID
 
 import qrcode
@@ -2447,6 +2448,17 @@ async def ui_peers_table(
         "page_size": page_size,
     }
 
+    push_url = "/dashboard?" + urlencode({
+        "page_size": page_size,
+        "status": status,
+        "hide_removed": 1 if hide_removed_enabled else 0,
+        "page": page,
+    })
+
+    response_headers = {}
+    if request.headers.get("HX-Request", "").lower() == "true":
+        response_headers["HX-Push-Url"] = push_url
+
     return templates.TemplateResponse(
         request=request,
         name="peers_table.html",
@@ -2460,6 +2472,7 @@ async def ui_peers_table(
             "has_prev": page > 1,
             "has_next": page < total_pages,
         },
+        headers=response_headers,
     )
 
 
