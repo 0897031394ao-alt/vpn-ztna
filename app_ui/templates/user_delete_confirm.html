@@ -43,7 +43,36 @@
       </div>
     </dl>
 
-    <div class="mt-5 flex justify-end gap-3">
+    {% if not can_delete %}
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% if user.active_peer_count > 0 %}
+        <a
+          href="/dashboard#peers-section"
+          class="inline-flex items-center rounded-md border border-cyan-700/60 bg-cyan-950/40 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-900/50"
+        >
+          Open peers
+        </a>
+        {% endif %}
+        {% if user.direct_policy_count > 0 %}
+        <a
+          href="/policies"
+          class="inline-flex items-center rounded-md border border-violet-700/60 bg-violet-950/40 px-3 py-2 text-sm font-medium text-violet-200 hover:bg-violet-900/50"
+        >
+          View policies
+        </a>
+        {% endif %}
+        {% if user.group_count > 0 %}
+        <a
+          href="/groups"
+          class="inline-flex items-center rounded-md border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-sm font-medium text-amber-200 hover:bg-amber-900/50"
+        >
+          View groups
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="mt-5 flex justify-end gap-3">
       <button
         type="button"
         class="rounded-md bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600"
