@@ -1,3 +1,5 @@
+import io
+import qrcode
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -337,8 +339,58 @@ async def get_my_config(
         content=config_text,
         media_type="text/plain",
         headers={
-            "Content-Disposition": 'attachment; filename="wg0.conf"',
+            "Content-Disposition": 'attachment; filename="wg0.conf"', "Cache-Control": "no-store",
         },
+    )
+
+
+@router.get("/my/qr")
+async def get_my_qr(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Вернуть QR-код WireGuard-конфига для текущего пользователя.
+    Формат: image/png, пригоден для импорта в мобильный WireGuard.
+    """
+
+    stmt = (
+        select(Peer)
+        .where(
+            Peer.user_id == current_user.id,
+            Peer.provisioning_status == ProvisioningStatus.provisioned,
+        )
+        .order_by(Peer.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    peer = result.scalars().first()
+
+    if peer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No peer found for current user",
+        )
+
+    cfg = build_client_config_for_peer(peer)
+
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_Q,
+        box_size=6,
+        border=2,
+    )
+    qr.add_data(cfg)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
     )
 
 

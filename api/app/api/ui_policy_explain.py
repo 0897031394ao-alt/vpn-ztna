@@ -373,6 +373,43 @@ async def policy_explain_page() -> str:
       font-size: 0.88rem;
     }
 
+    .qr-modal.hidden {
+      display: none;
+    }
+    .qr-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6); /* тёмный фон */
+    }
+    .qr-modal-card {
+      position: relative;
+      z-index: 51;
+      background: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      max-width: 320px;
+      width: 100%;
+      box-shadow: 0 15px 30px rgba(15, 23, 42, 0.25);
+      text-align: center;
+    }
+    #qr-modal-image {
+      display: block;
+      margin: 1rem auto;
+      max-width: 240px;
+      max-height: 240px;
+    }
+    .qr-modal-title {
+      margin-bottom: 0.5rem;
+    }
+
     @media (max-width: 920px) {
       .grid {
         grid-template-columns: 1fr;
@@ -464,10 +501,25 @@ async def policy_explain_page() -> str:
         <div class="stats" id="stats-grid"></div>
 
         <div class="btn-row" style="margin-bottom:16px;">
-          <button id="enroll-button" type="button" class="btn-primary">Enroll / Recreate Peer</button>
+
           <button id="reload-button" type="button" class="btn-secondary">Reload Policy</button>
           <button id="download-button" type="button" class="btn-secondary">Download Config</button>
+          <button id="qr-button" type="button" class="btn-secondary">Show QR</button>
           <button id="toggle-steps-button" type="button" class="btn-secondary">Show Steps</button>
+          <div id="qr-modal-overlay" class="qr-modal hidden">
+            <div class="qr-modal-backdrop"></div>
+            <div class="qr-modal-card">
+              <h3 class="qr-modal-title">WireGuard QR</h3>
+              <p class="subtle">
+                Scan this code in the WireGuard mobile app on your own device.
+                Do not share this QR with anyone.
+              </p>
+              <img id="qr-modal-image" alt="WireGuard QR code" />
+              <button id="qr-modal-close" type="button" class="btn-secondary">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
 
         <div id="action-error" class="error-box"></div>
@@ -537,7 +589,12 @@ async def policy_explain_page() -> str:
     const reloadButton = document.getElementById('reload-button');
     const downloadButton = document.getElementById('download-button');
     const toggleStepsButton = document.getElementById('toggle-steps-button');
-    const enrollButton = document.getElementById('enroll-button');
+
+    const qrButton = document.getElementById('qr-button');
+    const qrModal = document.getElementById('qr-modal-overlay');
+    const qrModalImage = document.getElementById('qr-modal-image');
+    const qrModalClose = document.getElementById('qr-modal-close');
+    const qrModalCard = document.querySelector('.qr-modal-card');
 
     const actionError = document.getElementById('action-error');
     const actionSuccess = document.getElementById('action-success');
@@ -631,21 +688,25 @@ async def policy_explain_page() -> str:
       return { filename, text };
     }
 
-    async function apiEnrollMyPeer(token) {
-      const resp = await fetch(baseUrl + '/api/v1/peers/my/enroll', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token
+    async function apiDownloadQr(token) {
+        const resp = await fetch(baseUrl + '/api/v1/peers/my/qr', {
+          headers: {
+            'Authorization': 'Bearer ' + token
+          }
+        });
+
+        if (resp.status === 404) {
+          throw new Error('No provisioned peer found for current user.');
         }
-      });
 
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error('Failed to enroll peer: ' + resp.status + ' ' + text);
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('Failed to get QR: ' + resp.status + ' ' + text);
+        }
+
+        const blob = await resp.blob();
+        return blob; // PNG
       }
-
-      return await resp.json();
-    }
 
     function setLoggedInState(isLoggedIn) {
       if (isLoggedIn) {
@@ -735,6 +796,25 @@ async def policy_explain_page() -> str:
         stepsBody.appendChild(tr);
       }
     }
+
+    function showQrModalFromBlob(blob) {
+        const url = URL.createObjectURL(blob);
+
+        // запомним URL, чтобы потом revoke
+        qrModal.dataset.url = url;
+        qrModalImage.src = url;
+
+        qrModal.classList.remove('hidden');
+      }
+
+      function hideQrModal() {
+        const url = qrModal.dataset.url;
+        if (url) {
+          URL.revokeObjectURL(url);
+          qrModal.dataset.url = '';
+        }
+        qrModal.classList.add('hidden');
+      }
 
     function renderCidrGroup(items) {
       if (!items || items.length === 0) {
@@ -827,34 +907,26 @@ async def policy_explain_page() -> str:
       }
     }
 
-    async function handleEnroll() {
-      hideBox(actionError);
-      hideBox(actionSuccess);
+    async function handleQr() {
+        hideBox(actionError);
+        hideBox(actionSuccess);
+        qrButton.disabled = true;
 
-       const confirmed = window.confirm('This action will (re)create your VPN peer. '
-        + 'Your VPN IP may change. Allowed routes may be recalculated. '
-        + 'You will need to re-import the new config into WireGuard. '
-        + 'Do you want to continue?');
-      if (!confirmed) {
-        return;
-      }
+        try {
+          if (!accessToken) {
+            throw new Error('Not authenticated.');
+          }
 
-      enrollButton.disabled = true;
+          const blob = await apiDownloadQr(accessToken);
+          showQrModalFromBlob(blob);
 
-      try {
-        if (!accessToken) {
-          throw new Error('Not authenticated.');
+          showBox(actionSuccess, 'WireGuard QR code displayed.');
+        } catch (err) {
+          showBox(actionError, err.message || String(err));
+        } finally {
+          qrButton.disabled = false;
         }
-
-        await apiEnrollMyPeer(accessToken);
-        await loadPolicy();
-        showBox(actionSuccess, 'Peer enrolled successfully. Policy data reloaded.');
-      } catch (err) {
-        showBox(actionError, err.message || String(err));
-      } finally {
-        enrollButton.disabled = false;
       }
-    }
 
     function handleLogout() {
       accessToken = null;
@@ -909,7 +981,10 @@ async def policy_explain_page() -> str:
     downloadButton.addEventListener('click', handleDownload);
     logoutButton.addEventListener('click', handleLogout);
     toggleStepsButton.addEventListener('click', handleToggleSteps);
-    enrollButton.addEventListener('click', handleEnroll);
+
+    qrButton.addEventListener('click', handleQr);
+    qrModalClose.addEventListener('click', hideQrModal);
+
   </script>
 </body>
 </html>

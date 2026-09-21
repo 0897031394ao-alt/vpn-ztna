@@ -137,7 +137,7 @@ async def ready():
 
 
 # ---------------------------------------------------------------------------
-# Dashboard / Logout (дублируют ui_admin_router но нужны с current_user)
+# Dashboard
 # ---------------------------------------------------------------------------
 
 @app.get("/dashboard", response_class=HTMLResponse)
