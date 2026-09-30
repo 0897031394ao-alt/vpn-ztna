@@ -546,7 +546,7 @@ async def logout(
         current_user=user,
         peer=None,
         resource=None,
-        details={"session_id": sid, "reason": "refresh_token_reuse"},
+        details={"session_id": sid, "reason": "logout_requested"},
         request=request,
     )
     await db.commit()
