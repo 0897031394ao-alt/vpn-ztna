@@ -232,6 +232,18 @@ async def ui_resources_page(request: Request):
     )
 
 
+@ui_admin_router.get("/audit", response_class=HTMLResponse)
+async def ui_audit_page(request: Request):
+    current_user = await get_current_user_from_cookie(request)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="audit.html",
+        context={"active_page": "/audit", "current_user": current_user},
+    )
+
+
 @ui_admin_router.get("/debug/check", response_class=HTMLResponse)
 async def ui_debug_check_page(request: Request):
     current_user = await get_current_user_from_cookie(request)
