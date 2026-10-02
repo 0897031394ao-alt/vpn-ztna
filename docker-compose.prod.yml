@@ -23,6 +23,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vpnztna}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB:-vpnztna}
       SECRET_KEY: ${SECRET_KEY}
       LOG_JSON: "true"
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-90}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +41,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vpnztna}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB:-vpnztna}
       SECRET_KEY: ${SECRET_KEY}
       LOG_JSON: "true"
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-90}
     depends_on:
       postgres:
         condition: service_healthy

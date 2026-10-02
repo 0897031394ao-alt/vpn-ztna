@@ -102,6 +102,36 @@ async def dashboard_page(request: Request):
     current_user = await get_current_user_from_cookie(request)
     if not current_user:
         return RedirectResponse(url="/login", status_code=302)
+
+    qp = request.query_params
+
+    status = qp.get("status", "all")
+
+    try:
+        hide_removed = int(qp.get("hide_removed", "1"))
+    except ValueError:
+        hide_removed = 1
+
+    try:
+        page = max(int(qp.get("page", "1")), 1)
+    except ValueError:
+        page = 1
+
+    try:
+        page_size = int(qp.get("page_size", "10"))
+    except ValueError:
+        page_size = 10
+
+    if page_size not in {5, 10, 25, 50, 100}:
+        page_size = 10
+
+    try:
+        peer_user_id = int(qp.get("peer_user_id")) if qp.get("peer_user_id") else None
+        if peer_user_id is not None and peer_user_id < 1:
+            peer_user_id = None
+    except ValueError:
+        peer_user_id = None
+
     summary = await load_dashboard_summary()
     return templates.TemplateResponse(
         request=request,
@@ -110,9 +140,15 @@ async def dashboard_page(request: Request):
             "active_page": "/dashboard",
             "current_user": current_user,
             "summary": summary,
+            "peer_filters": {
+                "status": status,
+                "hide_removed": hide_removed,
+                "page": page,
+                "page_size": page_size,
+                "peer_user_id": peer_user_id,
+            },
         },
     )
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = BASE_DIR / "app_ui"
@@ -304,6 +340,7 @@ async def render_peers_table(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
     sync_result: dict | None = None,
 ):
     # Reuse the canonical paginated renderer behind GET /ui/peers/table.
@@ -315,6 +352,7 @@ async def render_peers_table(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
     if sync_result is None:
@@ -331,6 +369,34 @@ async def render_peers_table(
     )
 
 
+@app.get("/ui/peers/table", response_class=HTMLResponse)
+async def ui_peers_table_live(
+    request: Request,
+    status: str = "all",
+    hide_removed: int = 1,
+    page: int = 1,
+    page_size: int = 10,
+    peer_user_id: int | None = None,
+):
+    if page < 1:
+        page = 1
+
+    if page_size not in {5, 10, 25, 50, 100}:
+        page_size = 10
+
+    if peer_user_id is not None and peer_user_id < 1:
+        peer_user_id = None
+
+    return await render_peers_table(
+        request,
+        status=status,
+        hide_removed=hide_removed,
+        page=page,
+        page_size=page_size,
+        peer_user_id=peer_user_id,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Peer actions
 # ---------------------------------------------------------------------------
@@ -343,6 +409,7 @@ async def ui_peers_recalculate(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         await recalculate_peer_by_id(db, peer_id)
@@ -353,6 +420,7 @@ async def ui_peers_recalculate(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -364,6 +432,7 @@ async def ui_peers_provision(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         await provision_peer_by_id(db, peer_id)
@@ -374,6 +443,7 @@ async def ui_peers_provision(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -385,6 +455,7 @@ async def ui_peers_retry(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         await provision_peer_by_id(db, peer_id)
@@ -395,6 +466,7 @@ async def ui_peers_retry(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -406,6 +478,7 @@ async def ui_peers_remove(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         await remove_peer_by_id(db, peer_id)
@@ -416,6 +489,7 @@ async def ui_peers_remove(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -427,6 +501,7 @@ async def ui_peer_revoke(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         await remove_peer_by_id(db, peer_id)
@@ -437,6 +512,7 @@ async def ui_peer_revoke(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -448,6 +524,7 @@ async def ui_peer_regenerate(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: int | None = None,
 ):
     async with AsyncSessionLocal() as db:
         try:
@@ -464,6 +541,7 @@ async def ui_peer_regenerate(
         hide_removed=hide_removed,
         page=page,
         page_size=page_size,
+        peer_user_id=peer_user_id,
     )
 
 
@@ -499,6 +577,14 @@ async def ui_peers_sync_all(
     if page_size not in {5, 10, 25, 50, 100}:
         page_size = 10
 
+    try:
+        raw_peer_user_id = form.get("peer_user_id")
+        peer_user_id = int(raw_peer_user_id) if raw_peer_user_id not in (None, "") else None
+        if peer_user_id is not None and peer_user_id < 1:
+            peer_user_id = None
+    except (TypeError, ValueError):
+        peer_user_id = None
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Peer.id)
@@ -526,6 +612,7 @@ async def ui_peers_sync_all(
             "processed": len(pending_ids),
             "errors": errors,
         },
+        peer_user_id=peer_user_id,
     )
 
 
@@ -561,6 +648,14 @@ async def ui_peers_retry_errors(
     if page_size not in {5, 10, 25, 50, 100}:
         page_size = 10
 
+    try:
+        raw_peer_user_id = form.get("peer_user_id")
+        peer_user_id = int(raw_peer_user_id) if raw_peer_user_id not in (None, "") else None
+        if peer_user_id is not None and peer_user_id < 1:
+            peer_user_id = None
+    except (TypeError, ValueError):
+        peer_user_id = None
+
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Peer.id)
@@ -588,6 +683,7 @@ async def ui_peers_retry_errors(
             "processed": len(error_ids),
             "errors": errors,
         },
+        peer_user_id=peer_user_id,
     )
 
 
@@ -721,11 +817,16 @@ async def ui_groups_page(request: Request):
     current_user = await get_current_user_from_cookie(request)
     if not current_user:
         return RedirectResponse(url="/login", status_code=302)
+
+    raw_user_id = request.query_params.get("user_id")
+    user_id = int(raw_user_id) if raw_user_id and raw_user_id.isdigit() else None
+
     return templates.TemplateResponse(
         request=request,
         name="groups.html",
         context={
             "active_page": "/groups",
             "current_user": current_user,
+            "user_id": user_id,
         },
     )

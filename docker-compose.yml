@@ -33,6 +33,7 @@ services:
       SECRET_KEY: dev-secret-change
       WG_GATEWAY_URL: "http://127.0.0.1:51821"
       UI_COOKIE_SECURE: "true"
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-90}
     depends_on:
       - postgres
 
@@ -50,6 +51,7 @@ services:
       SECRET_KEY: dev-secret-change
       WG_GATEWAY_URL: "http://127.0.0.1:51821"
       UI_COOKIE_SECURE: "true"
+      AUDIT_LOG_RETENTION_DAYS: ${AUDIT_LOG_RETENTION_DAYS:-90}
     depends_on:
       - postgres
       - wg-gateway

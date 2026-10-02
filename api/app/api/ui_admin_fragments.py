@@ -19,6 +19,7 @@ from app.api.ui_admin import require_ui_admin
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.auth_session import AuthSession
+from app.models.audit_event import AuditEvent
 from app.models.group import Group, user_group
 from app.models.peer import Peer, ProvisioningStatus
 from app.models.policy import Policy
@@ -29,6 +30,7 @@ from app.schemas.resource import ResourceCreate, ResourceUpdate
 from app.schemas.tenant import TenantCreate, TenantUpdate
 from app.schemas.group import GroupCreate, GroupUpdate
 from app.services.config_service import build_client_config_for_peer
+from app.services.audit import log_event
 from app.services.peer_service import (
     provision_peer_by_id,
     recalculate_peer_by_id,
@@ -953,6 +955,22 @@ async def ui_user_toggle_active(
             .values(is_revoked=True)
         )
 
+    current_user = getattr(request.state, "current_user", None) or getattr(
+        request.state, "currentuser", None
+    )
+
+    await log_event(
+        db,
+        action="user.toggle_active",
+        current_user=current_user,
+        details={
+            "target_user_id": user.id,
+            "target_username": user.username,
+            "new_is_active": user.is_active,
+        },
+        request=request,
+    )
+
     await db.commit()
 
     page = int(request.query_params.get("page", 1) or 1)
@@ -982,6 +1000,21 @@ async def ui_user_toggle_admin(
         )
 
     user.is_admin = not user.is_admin
+
+    current_user = await require_ui_admin(request)
+
+    await log_event(
+        db,
+        action="user.toggle_admin",
+        current_user=current_user,
+        details={
+            "target_user_id": user.id,
+            "target_username": user.username,
+            "new_is_admin": user.is_admin,
+        },
+        request=request,
+    )
+
     await db.commit()
 
     page = int(request.query_params.get("page", 1) or 1)
@@ -1062,6 +1095,27 @@ async def ui_user_create_submit(
         is_admin=is_admin,
     )
     db.add(user)
+
+    await db.flush()
+
+    current_user = getattr(request.state, "current_user", None) or getattr(
+        request.state, "currentuser", None
+    )
+
+    await log_event(
+        db,
+        action="user.create",
+        current_user=current_user,
+        details={
+            "target_user_id": user.id,
+            "target_username": user.username,
+            "target_email": user.email,
+            "is_active": user.is_active,
+            "is_admin": user.is_admin,
+        },
+        request=request,
+    )
+
     await db.commit()
 
     response = await render_users_table_paginated(
@@ -1171,6 +1225,10 @@ async def ui_user_delete(
             status_code=409,
         )
 
+    target_user_id = user.id
+    target_username = user.username
+    target_email = user.email
+
     await db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
     await db.execute(
         delete(Peer).where(
@@ -1181,6 +1239,23 @@ async def ui_user_delete(
 
     user.groups = []
     await db.flush()
+
+    current_user = getattr(request.state, "current_user", None) or getattr(
+        request.state, "currentuser", None
+    )
+
+    await log_event(
+        db,
+        action="user.delete",
+        current_user=current_user,
+        details={
+            "target_user_id": target_user_id,
+            "target_username": target_username,
+            "target_email": target_email,
+        },
+        request=request,
+    )
+
     await db.delete(user)
     await db.commit()
 
@@ -1228,6 +1303,7 @@ def group_form_response(
 async def render_groups_table_paginated(
     request: Request, db: AsyncSession,
     page: int = 1, limit: int = 20, status_filter: str = "active",
+    user_id: int | None = None,
 ) -> HTMLResponse:
     page = max(page, 1)
     if limit not in {5, 10, 20, 50, 100}:
@@ -1248,6 +1324,16 @@ async def render_groups_table_paginated(
     elif status_filter == "inactive":
         query = query.where(Group.is_active.is_(False))
         count_query = count_query.where(Group.is_active.is_(False))
+
+    selected_user_name = None
+    if user_id is not None:
+        query = query.where(Group.users.any(User.id == user_id))
+        count_query = count_query.where(Group.users.any(User.id == user_id))
+        selected_user = await db.get(User, user_id)
+        if selected_user:
+            selected_user_name = selected_user.username or selected_user.email or f"User #{user_id}"
+        else:
+            selected_user_name = f"User #{user_id}"
 
     total = (await db.execute(count_query)).scalar() or 0
     total_pages = max((total + limit - 1) // limit, 1)
@@ -1278,6 +1364,7 @@ async def render_groups_table_paginated(
     html = templates.get_template("groups_table_paginated.html").render(
         groups=group_rows, request=request, page=page, limit=limit,
         status=status_filter, total=total, total_pages=total_pages,
+        user_id=user_id, selected_user_name=selected_user_name,
     )
     return HTMLResponse(html)
 
@@ -1285,9 +1372,10 @@ async def render_groups_table_paginated(
 @ui_fragments_router.get("/ui/groups/table", response_class=HTMLResponse)
 async def ui_groups_table(
     request: Request, page: int = 1, limit: int = 20, status: str = "active",
+    user_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    return await render_groups_table_paginated(request, db, page, limit, status)
+    return await render_groups_table_paginated(request, db, page, limit, status, user_id)
 
 
 @ui_fragments_router.get("/ui/groups/new", response_class=HTMLResponse)
@@ -1845,6 +1933,8 @@ async def render_policies_table_paginated(
     limit: int = 20,
     status_filter: str = "active",
     group_id: int | None = None,
+    user_id: int | None = None,
+    resource_id: int | None = None,
 ) -> HTMLResponse:
     page = max(page, 1)
 
@@ -1878,6 +1968,27 @@ async def render_policies_table_paginated(
         count_query = count_query.where(Policy.group_id == group_id)
         selected_group = await db.get(Group, group_id)
         selected_group_name = selected_group.name if selected_group else f"Group #{group_id}"
+
+    selected_user_name = None
+    if user_id is not None:
+        query = query.where(Policy.user_id == user_id)
+        count_query = count_query.where(Policy.user_id == user_id)
+        selected_user = await db.get(User, user_id)
+        if selected_user:
+            selected_user_name = selected_user.username or selected_user.email or f"User #{user_id}"
+        else:
+            selected_user_name = f"User #{user_id}"
+
+    selected_resource_name = None
+    if resource_id is not None:
+        query = query.where(Policy.resource_id == resource_id)
+        count_query = count_query.where(Policy.resource_id == resource_id)
+        selected_resource = await db.get(Resource, resource_id)
+        selected_resource_name = (
+            selected_resource.name
+            if selected_resource
+            else f"Resource #{resource_id}"
+        )
 
     total = (await db.execute(count_query)).scalar() or 0
     total_pages = max((total + limit - 1) // limit, 1)
@@ -1936,12 +2047,18 @@ async def render_policies_table_paginated(
         total=total,
         total_pages=total_pages,
         group_id=group_id,
+        user_id=user_id,
+        resource_id=resource_id,
         selected_group_name=selected_group_name,
+        selected_user_name=selected_user_name,
+        selected_resource_name=selected_resource_name,
         filters={
             "page": page,
             "limit": limit,
             "status": status_filter,
             "group_id": group_id,
+            "user_id": user_id,
+            "resource_id": resource_id,
             "total": total,
             "total_pages": total_pages,
         },
@@ -1956,6 +2073,8 @@ async def ui_policies_table(
     limit: int = 20,
     status: str = "active",
     group_id: int | None = None,
+    user_id: int | None = None,
+    resource_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     return await render_policies_table_paginated(
@@ -1965,6 +2084,8 @@ async def ui_policies_table(
         limit=limit,
         status_filter=status,
         group_id=group_id,
+        user_id=user_id,
+        resource_id=resource_id,
     )
 
 
@@ -2399,6 +2520,7 @@ async def ui_peers_table(
     hide_removed: int = 1,
     page: int = 1,
     page_size: int = 10,
+    peer_user_id: str | None = None,
 ):
     valid_statuses = {"all"} | {s.value for s in ProvisioningStatus}
     if status not in valid_statuses:
@@ -2411,8 +2533,22 @@ async def ui_peers_table(
     if page_size < 1:
         page_size = 10
 
+    normalized_peer_user_id: int | None = None
+    if peer_user_id is not None:
+        raw_peer_user_id = peer_user_id.strip()
+        if raw_peer_user_id:
+            try:
+                normalized_peer_user_id = int(raw_peer_user_id)
+            except ValueError:
+                normalized_peer_user_id = None
+
+            if normalized_peer_user_id is not None and normalized_peer_user_id < 1:
+                normalized_peer_user_id = None
+
     async with AsyncSessionLocal() as db:
         base_stmt = select(Peer)
+        if normalized_peer_user_id is not None:
+            base_stmt = base_stmt.where(Peer.user_id == normalized_peer_user_id)
         if status != "all":
             base_stmt = base_stmt.where(Peer.provisioning_status == ProvisioningStatus(status))
         if hide_removed_enabled and status != "removed":
@@ -2446,14 +2582,19 @@ async def ui_peers_table(
         "hide_removed": hide_removed_enabled,
         "page": page,
         "page_size": page_size,
+        "peer_user_id": normalized_peer_user_id,
     }
 
-    push_url = "/dashboard?" + urlencode({
+    push_params = {
         "page_size": page_size,
         "status": status,
         "hide_removed": 1 if hide_removed_enabled else 0,
         "page": page,
-    })
+    }
+    if normalized_peer_user_id is not None:
+        push_params["peer_user_id"] = normalized_peer_user_id
+
+    push_url = "/dashboard?" + urlencode(push_params)
 
     response_headers = {}
     if request.headers.get("HX-Request", "").lower() == "true":
@@ -2601,3 +2742,97 @@ async def ui_peer_config_qr(peer_id: int):
         media_type="image/png",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@ui_fragments_router.get("/ui/audit/table", response_class=HTMLResponse)
+async def ui_audit_table(
+    request: Request,
+    page: int = 1,
+    limit: int = 20,
+    event_type: str = "",
+    user_id: str | None = None,
+    peer_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    return await render_audit_table_paginated(
+        request=request,
+        db=db,
+        page=page,
+        limit=limit,
+        event_type=event_type,
+        user_id=parse_optional_int(user_id),
+        peer_id=parse_optional_int(peer_id),
+    )
+
+
+async def render_audit_table_paginated(
+    request: Request,
+    db: AsyncSession,
+    page: int = 1,
+    limit: int = 20,
+    event_type: str = "",
+    user_id: int | None = None,
+    peer_id: int | None = None,
+) -> HTMLResponse:
+    page = max(page, 1)
+    if limit not in {5, 10, 20, 50, 100}:
+        limit = 20
+
+    event_type = (event_type or "").strip()
+    if user_id is not None and user_id < 1:
+        user_id = None
+    if peer_id is not None and peer_id < 1:
+        peer_id = None
+
+    filters = []
+    if event_type:
+        filters.append(AuditEvent.event_type == event_type)
+    if user_id is not None:
+        filters.append(AuditEvent.user_id == user_id)
+    if peer_id is not None:
+        filters.append(AuditEvent.peer_id == peer_id)
+
+    total_stmt = select(func.count()).select_from(AuditEvent)
+    if filters:
+        total_stmt = total_stmt.where(*filters)
+
+    total = (await db.execute(total_stmt)).scalar() or 0
+    total_pages = max((total + limit - 1) // limit, 1)
+
+    if page > total_pages:
+        page = total_pages
+
+    stmt = (
+        select(AuditEvent)
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    if filters:
+        stmt = stmt.where(*filters)
+
+    rows = (await db.execute(stmt)).scalars().all()
+
+    event_types_stmt = (
+        select(AuditEvent.event_type)
+        .where(AuditEvent.event_type.is_not(None))
+        .distinct()
+        .order_by(AuditEvent.event_type.asc())
+    )
+    event_types_result = await db.execute(event_types_stmt)
+    event_types = [row[0] for row in event_types_result.all() if row[0]]
+
+    html = templates.get_template("audit_table_paginated.html").render(
+        request=request,
+        items=rows,
+        page=page,
+        limit=limit,
+        total=total,
+        total_pages=total_pages,
+        event_type=event_type,
+        user_id=user_id,
+        peer_id=peer_id,
+        event_types=event_types,
+    )
+    return HTMLResponse(html)
+

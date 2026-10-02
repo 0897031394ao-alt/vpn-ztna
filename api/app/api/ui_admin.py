@@ -172,11 +172,41 @@ async def load_dashboard_summary() -> dict:
 
 @ui_admin_router.get("/dashboard", response_class=HTMLResponse)
 async def ui_dashboard_page(request: Request):
-    print("DEBUG: ui_dashboard_page called")
     current_user = await get_current_user_from_cookie(request)
     if not current_user:
         return RedirectResponse(url="/login", status_code=302)
+
+    qp = request.query_params
+
+    status = qp.get("status", "all")
+
+    try:
+        hide_removed = int(qp.get("hide_removed", "1"))
+    except ValueError:
+        hide_removed = 1
+
+    try:
+        page = max(int(qp.get("page", "1")), 1)
+    except ValueError:
+        page = 1
+
+    try:
+        page_size = int(qp.get("page_size", "10"))
+    except ValueError:
+        page_size = 10
+
+    if page_size not in {5, 10, 25, 50, 100}:
+        page_size = 10
+
+    try:
+        peer_user_id = int(qp.get("peer_user_id")) if qp.get("peer_user_id") else None
+        if peer_user_id is not None and peer_user_id < 1:
+            peer_user_id = None
+    except ValueError:
+        peer_user_id = None
+
     summary = await load_dashboard_summary()
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -184,6 +214,13 @@ async def ui_dashboard_page(request: Request):
             "active_page": "/dashboard",
             "current_user": current_user,
             "summary": summary,
+            "peer_filters": {
+                "status": status,
+                "hide_removed": hide_removed,
+                "page": page,
+                "page_size": page_size,
+                "peer_user_id": peer_user_id,
+            },
         },
     )
 
@@ -209,6 +246,12 @@ async def ui_policies_page(request: Request):
     raw_group_id = request.query_params.get("group_id")
     group_id = int(raw_group_id) if raw_group_id and raw_group_id.isdigit() else None
 
+    raw_user_id = request.query_params.get("user_id")
+    user_id = int(raw_user_id) if raw_user_id and raw_user_id.isdigit() else None
+
+    raw_resource_id = request.query_params.get("resource_id")
+    resource_id = int(raw_resource_id) if raw_resource_id and raw_resource_id.isdigit() else None
+
     return templates.TemplateResponse(
         request=request,
         name="policies.html",
@@ -216,6 +259,8 @@ async def ui_policies_page(request: Request):
             "active_page": "policies",
             "current_user": current_user,
             "group_id": group_id,
+            "user_id": user_id,
+            "resource_id": resource_id,
         },
     )
 
@@ -229,6 +274,18 @@ async def ui_resources_page(request: Request):
         request=request,
         name="resources.html",
         context={"active_page": "resources", "current_user": current_user},
+    )
+
+
+@ui_admin_router.get("/audit", response_class=HTMLResponse)
+async def ui_audit_page(request: Request):
+    current_user = await get_current_user_from_cookie(request)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="audit.html",
+        context={"active_page": "/audit", "current_user": current_user},
     )
 
 

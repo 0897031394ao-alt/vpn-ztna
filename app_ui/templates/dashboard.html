@@ -86,12 +86,13 @@
 
 <div
   id="peers-table"
-  hx-get="/ui/peers/table"
+  hx-get="/ui/peers/table?status={{ peer_filters.status }}&hide_removed={{ peer_filters.hide_removed }}&page={{ peer_filters.page }}&page_size={{ peer_filters.page_size }}{% if peer_filters.peer_user_id is not none %}&peer_user_id={{ peer_filters.peer_user_id }}{% endif %}"
   hx-trigger="load"
   hx-target="#peers-table"
   hx-swap="innerHTML"
 >
   <div class="text-sm text-slate-400">Loading peers...</div>
 </div>
+
 <div id="modal-root"></div>
 {% endblock %}

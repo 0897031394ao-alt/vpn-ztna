@@ -21,7 +21,7 @@
 
 <div
   id="groups-table-wrapper"
-  hx-get="/ui/groups/table?page=1&limit=20&status=active"
+  hx-get="/ui/groups/table?page=1&limit=20&status={% if user_id %}all{% else %}active{% endif %}{% if user_id %}&user_id={{ user_id }}{% endif %}"
   hx-trigger="load"
   hx-target="#groups-table-wrapper"
   hx-swap="outerHTML"
