@@ -353,6 +353,7 @@ async def get_my_config(
 
 @router.get("/my/qr")
 async def get_my_qr(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
