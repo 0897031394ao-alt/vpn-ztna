@@ -34,6 +34,23 @@ from app.services.audit_service import log_event
 router = APIRouter(prefix="/peers", tags=["peers"])
 
 
+async def _get_latest_provisioned_peer_for_user(
+    db: AsyncSession,
+    user_id: int,
+) -> Peer | None:
+    stmt = (
+        select(Peer)
+        .where(
+            Peer.user_id == user_id,
+            Peer.provisioning_status == ProvisioningStatus.provisioned,
+        )
+        .order_by(Peer.id.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 @router.post("/", response_model=PeerRead)
 async def register_peer_endpoint(
     payload: PeerCreate,
@@ -300,17 +317,7 @@ async def get_my_config(
     Формат: text/plain, как готовый .conf.
     """
 
-    stmt = (
-        select(Peer)
-        .where(
-            Peer.user_id == current_user.id,
-            Peer.provisioning_status == ProvisioningStatus.provisioned,
-        )
-        .order_by(Peer.id.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    peer = result.scalars().first()
+    peer = await _get_latest_provisioned_peer_for_user(db, current_user.id)
 
     if peer is None:
         raise HTTPException(
@@ -354,23 +361,28 @@ async def get_my_qr(
     Формат: image/png, пригоден для импорта в мобильный WireGuard.
     """
 
-    stmt = (
-        select(Peer)
-        .where(
-            Peer.user_id == current_user.id,
-            Peer.provisioning_status == ProvisioningStatus.provisioned,
-        )
-        .order_by(Peer.id.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    peer = result.scalars().first()
+    peer = await _get_latest_provisioned_peer_for_user(db, current_user.id)
 
     if peer is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No peer found for current user",
         )
+
+    await log_event(
+        db,
+        action="peer.get_qr",
+        current_user=current_user,
+        peer=peer,
+        details={
+            "user_id": peer.user_id,
+            "peer_id": peer.id,
+            "vpn_ip": peer.vpn_ip,
+        },
+        request=request,
+    )
+
+    await db.commit()
 
     cfg = build_client_config_for_peer(peer)
 
@@ -405,17 +417,7 @@ async def explain_my_policies(
     Берём последний provisioned peer этого пользователя.
     """
 
-    stmt = (
-        select(Peer)
-        .where(
-            Peer.user_id == current_user.id,
-            Peer.provisioning_status == ProvisioningStatus.provisioned,
-        )
-        .order_by(Peer.id.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    peer = result.scalars().first()
+    peer = await _get_latest_provisioned_peer_for_user(db, current_user.id)
 
     if peer is None:
         raise HTTPException(
