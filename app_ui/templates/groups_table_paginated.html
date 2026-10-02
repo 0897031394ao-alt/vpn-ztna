@@ -2,7 +2,7 @@
 <div class="mb-3 flex items-center justify-between text-xs text-slate-400">
   <button
     {% if page <= 1 %}disabled{% endif %}
-    hx-get="/ui/groups/table?page={{ page - 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-get="/ui/groups/table?page={{ page - 1 }}&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
     hx-target="#groups-table"
     hx-swap="innerHTML"
     class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
@@ -18,20 +18,20 @@
       {% set end_page = total_pages if total_pages <= 5 else [total_pages, current_page + 2]|min %}
       {% if start_page > 1 %}
         <button class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
-          hx-get="/ui/groups/table?page=1&limit={{ limit }}&status={{ status }}"
+          hx-get="/ui/groups/table?page=1&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
           hx-target="#groups-table" hx-swap="innerHTML">1</button>
         {% if start_page > 2 %}<span class="px-1 text-slate-500">…</span>{% endif %}
       {% endif %}
       {% for p in range(start_page, end_page + 1) %}
         <button
           class="px-1.5 py-0.5 rounded {% if p == current_page %}bg-cyan-700 text-white{% else %}bg-slate-800 text-slate-200 hover:bg-slate-700{% endif %}"
-          hx-get="/ui/groups/table?page={{ p }}&limit={{ limit }}&status={{ status }}"
+          hx-get="/ui/groups/table?page={{ p }}&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
           hx-target="#groups-table" hx-swap="innerHTML">{{ p }}</button>
       {% endfor %}
       {% if end_page < total_pages %}
         {% if end_page < total_pages - 1 %}<span class="px-1 text-slate-500">…</span>{% endif %}
         <button class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700"
-          hx-get="/ui/groups/table?page={{ total_pages }}&limit={{ limit }}&status={{ status }}"
+          hx-get="/ui/groups/table?page={{ total_pages }}&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
           hx-target="#groups-table" hx-swap="innerHTML">{{ total_pages }}</button>
       {% endif %}
     </div>
@@ -39,7 +39,7 @@
 
   <button
     {% if page >= total_pages %}disabled{% endif %}
-    hx-get="/ui/groups/table?page={{ page + 1 }}&limit={{ limit }}&status={{ status }}"
+    hx-get="/ui/groups/table?page={{ page + 1 }}&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
     hx-target="#groups-table"
     hx-swap="innerHTML"
     class="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
@@ -80,7 +80,8 @@
         </select>
         <input type="hidden" name="page" value="1">
         <input type="hidden" name="status" value="{{ status }}">
-      </label>
+      <input type="hidden" name="user_id" value="{{ user_id if user_id is not none else '' }}">
+          </label>
 
       <label class="flex items-center gap-2 text-sm text-slate-300">
         <span>Status</span>
@@ -98,10 +99,11 @@
         </select>
         <input type="hidden" name="page" value="1">
         <input type="hidden" name="limit" value="{{ limit }}">
-      </label>
+      <input type="hidden" name="user_id" value="{{ user_id if user_id is not none else '' }}">
+          </label>
 
       <button
-        hx-get="/ui/groups/table?page={{ page }}&limit={{ limit }}&status={{ status }}"
+        hx-get="/ui/groups/table?page={{ page }}&limit={{ limit }}&status={{ status }}{% if user_id %}&user_id={{ user_id }}{% endif %}"
         hx-target="#groups-table"
         hx-swap="innerHTML"
         class="rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -205,6 +207,18 @@
   </div>
 
   <div class="mt-3">
+    {% if user_id %}
+    <div class="flex items-center justify-between rounded-lg border border-violet-800 bg-violet-950/30 px-3 py-2 text-sm">
+      <div class="text-violet-100">
+        Showing groups related to user:
+        <span class="font-medium">{{ selected_user_name }}</span>
+      </div>
+      <a href="/groups" class="text-violet-300 hover:text-violet-200 hover:underline">
+        Clear user filter
+      </a>
+    </div>
+    {% endif %}
+
     {{ pagination(page, total_pages, limit, status, total, groups) }}
   </div>
 </div>

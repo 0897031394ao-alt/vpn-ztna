@@ -35,23 +35,24 @@
         hx-indicator="#peers-spinner"
         class="flex flex-col gap-2 sm:flex-row sm:items-center"
       >
-          <input
-            type="hidden"
-            name="page"
-            value="{{ page }}"
-          >
+        <input
+          type="hidden"
+          name="page"
+          value="{{ page }}"
+        >
+
         <label class="flex items-center gap-2 text-sm text-slate-300">
           <span>Rows</span>
           <select
             name="page_size"
-            class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             hx-get="/ui/peers/table"
             hx-trigger="change"
             hx-target="#peers-table-wrapper"
             hx-swap="outerHTML"
             hx-include="#peers-filters"
-            hx-vals='{"page":1}'
+            hx-vals='js:{page: 1, page_size: event.target.value}'
             hx-indicator="#peers-spinner"
+            class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="5" {% if page_size == 5 %}selected{% endif %}>5</option>
             <option value="10" {% if page_size == 10 %}selected{% endif %}>10</option>
@@ -62,43 +63,56 @@
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-300">
-          <span>Status</span>
-          <select
-            name="status"
-            class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            hx-get="/ui/peers/table"
-            hx-trigger="change"
-            hx-target="#peers-table-wrapper"
-            hx-swap="outerHTML"
-            hx-include="#peers-filters"
-            hx-vals='{"page":1}'
-            hx-indicator="#peers-spinner"
+          <span>User ID</span>
+          <input
+            id="peers-peer-user-id"
+            name="peer_user_id"
+            type="number"
+            min="1"
+            step="1"
+            value="{{ filters.peer_user_id if filters and filters.peer_user_id is not none else '' }}"
+            class="w-24 rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
-            <option value="all" {% if filters and filters.status == "all" %}selected{% endif %}>All</option>
-            <option value="pending" {% if filters and filters.status == "pending" %}selected{% endif %}>Pending</option>
-            <option value="provisioned" {% if filters and filters.status == "provisioned" %}selected{% endif %}>Provisioned</option>
-            <option value="error" {% if filters and filters.status == "error" %}selected{% endif %}>Error</option>
-            <option value="removed" {% if filters and filters.status == "removed" %}selected{% endif %}>Removed</option>
-            <option value="pending_revoke" {% if filters and filters.status == "pending_revoke" %}selected{% endif %}>Pending revoke</option>
-          </select>
+        </label>
+
+        <button
+          type="submit"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-600"
+        >
+          Find
+        </button>
+
+        <label class="flex items-center gap-2 text-sm text-slate-300">
+        <span>Status</span>
+        <select
+          name="status"
+          hx-get="/ui/peers/table"
+          hx-trigger="change"
+          hx-target="#peers-table-wrapper"
+          hx-swap="outerHTML"
+          hx-include="#peers-filters"
+          hx-vals='js:{page: 1, status: event.target.value}'
+          hx-indicator="#peers-spinner"
+          class="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+        >
+          <option value="all" {% if filters and filters.status == "all" %}selected{% endif %}>All</option>
+          <option value="pending" {% if filters and filters.status == "pending" %}selected{% endif %}>Pending</option>
+          <option value="provisioned" {% if filters and filters.status == "provisioned" %}selected{% endif %}>Provisioned</option>
+          <option value="error" {% if filters and filters.status == "error" %}selected{% endif %}>Error</option>
+          <option value="removed" {% if filters and filters.status == "removed" %}selected{% endif %}>Removed</option>
+          <option value="pending_revoke" {% if filters and filters.status == "pending_revoke" %}selected{% endif %}>Pending revoke</option>
+        </select>
         </label>
 
         <label class="flex items-center gap-2 text-sm text-slate-300">
           <input id="peers-hide-removed-value" type="hidden" name="hide_removed" value="{% if not filters or filters.hide_removed %}1{% else %}0{% endif %}">
           <input
             type="checkbox"
-
             value="1"
             class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
             {% if not filters or filters.hide_removed %}checked{% endif %}
-            hx-get="/ui/peers/table"
-            hx-trigger="change"
-            hx-target="#peers-table-wrapper"
-            hx-swap="outerHTML"
-            hx-include="#peers-filters"
-            hx-vals='{"page":1}'
-            hx-indicator="#peers-spinner"
-           onchange="document.getElementById('peers-hide-removed-value').value=this.checked?'1':'0'">
+            onchange="document.getElementById('peers-hide-removed-value').value=this.checked?'1':'0'; this.form.querySelector('input[name=page]').value='1'; this.dispatchEvent(new Event('change', { bubbles: true }))"
+          >
           <span>Hide removed</span>
         </label>
       </form>
@@ -172,31 +186,52 @@
     </div>
   </div>
 
-  <div class="mb-3 text-xs text-slate-400">
-    Showing status:
-    <span class="font-medium text-slate-300">
-      {% if not filters or filters.status == "all" %}
-        All
-      {% elif filters.status == "pending" %}
-        Pending
-      {% elif filters.status == "provisioned" %}
-        Provisioned
-      {% elif filters.status == "pending_revoke" %}
-        Pending revoke
-      {% elif filters.status == "error" %}
-        Error
-      {% elif filters.status == "removed" %}
-        Removed
+  <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+    <span>
+      Showing status:
+      <span class="font-medium text-slate-300">
+        {% if not filters or filters.status == "all" %}
+          All
+        {% elif filters.status == "pending" %}
+          Pending
+        {% elif filters.status == "provisioned" %}
+          Provisioned
+        {% elif filters.status == "pending_revoke" %}
+          Pending revoke
+        {% elif filters.status == "error" %}
+          Error
+        {% elif filters.status == "removed" %}
+          Removed
+        {% else %}
+          {{ filters.status }}
+        {% endif %}
+      </span>
+      {% if filters and filters.status == "removed" %}
+        · showing removed peers
+      {% elif not filters or filters.hide_removed %}
+        · removed hidden
       {% else %}
-        {{ filters.status }}
+        · removed visible
+      {% endif %}
+      {% if filters and filters.peer_user_id is not none %}
+        · filtered by User ID {{ filters.peer_user_id }}
       {% endif %}
     </span>
-    {% if filters and filters.status == "removed" %}
-      · showing removed peers
-    {% elif not filters or filters.hide_removed %}
-      · removed hidden
-    {% else %}
-      · removed visible
+
+    {% if filters and filters.peer_user_id is not none %}
+    <button
+      type="button"
+      hx-get="/ui/peers/table"
+      hx-target="#peers-table-wrapper"
+      hx-swap="outerHTML"
+      hx-include="#peers-filters"
+      hx-params="not peer_user_id"
+      hx-vals='{"page":1}'
+      hx-indicator="#peers-spinner"
+      class="inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-700"
+    >
+      Clear
+    </button>
     {% endif %}
   </div>
 
@@ -459,9 +494,28 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="px-4 py-6 text-center text-slate-500">
-            No peers found.
-          </td>
+           <td colspan="7" class="px-4 py-6 text-center text-slate-500">
+             {% if filters and filters.peer_user_id is not none %}
+               <div>No peers found for User ID {{ filters.peer_user_id }}.</div>
+               <div class="mt-3">
+                 <button
+                   type="button"
+                   hx-get="/ui/peers/table"
+                   hx-target="#peers-table-wrapper"
+                   hx-swap="outerHTML"
+                   hx-include="#peers-filters"
+                   hx-params="not peer_user_id"
+                   hx-vals='{"page":1}'
+                   hx-indicator="#peers-spinner"
+                   class="inline-flex items-center rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700"
+                 >
+                   Clear User ID filter
+                 </button>
+               </div>
+             {% else %}
+               No peers found.
+             {% endif %}
+           </td>
         </tr>
         {% endfor %}
       </tbody>
